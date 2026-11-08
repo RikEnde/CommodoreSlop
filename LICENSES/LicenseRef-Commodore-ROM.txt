@@ -1,0 +1,9 @@
+Commodore 64 ROM images (roms/kernal.rom: KERNAL 901227-03; roms/basic.rom:
+BASIC V2 901226-01; roms/chargen.rom: character generator 901225-01)
+
+Copyright (C) 1982 Commodore Business Machines. All rights reserved.
+
+These files are not covered by C64slop's BSD 3-Clause License, and no licence
+for them has been granted to the C64slop project. They are included so that
+the emulator works out of the box. If you are the rights holder and want them
+removed, please get in touch.

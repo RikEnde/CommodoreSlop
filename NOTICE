@@ -1,0 +1,50 @@
+C64slop
+Copyright 2026 The C64slop contributors
+
+Licensed under the BSD 3-Clause License (see LICENSE). Files listed in
+REUSE.toml as third-party keep their own licenses; see LICENSES/.
+
+The cpu module is copied from Beebslop (https://github.com/RikEnde/Beebslop),
+which took it from Elkslop (https://github.com/RikEnde/elkslop), Copyright 2026
+The Elkslop contributors and The Beebslop contributors, under the same BSD
+3-Clause License. These files are adapted from Beebslop, under the same
+license: c64/.../Typist.kt, c64/.../KeyboardText.kt, the whole desktop front
+end (desktop/.../Main.kt, Emulator.kt, EmulatorWindow.kt, ScreenPanel.kt,
+KeyMapping.kt, NaturalKeyboard.kt, AudioOutput.kt, MediaFiles.kt,
+AppIcon.kt (the drawing code; the computer is new), IconExport.kt), run.sh
+and desktop/build.gradle.kts.
+
+The Commodore 64 ROM images (roms/kernal.rom, roms/basic.rom,
+roms/chargen.rom) are copyright Commodore Business Machines and are included
+without a licence; they are not covered by the BSD License. See
+LICENSES/LicenseRef-Commodore-ROM.txt.
+
+------------------------------------------------------------------------------
+MAME
+
+Parts of the C64 emulation (c64/src/commonMain/kotlin/c64slop/c64/) follow the
+behavior of MAME's C64 driver and devices (https://github.com/mamedev/mame),
+which use the same BSD 3-Clause License as C64slop. No MAME code is copied.
+
+  C64Machine.kt, C64MemoryBus.kt, IoDevice.kt, KeyboardMatrix.kt:
+    src/mame/commodore/c64.cpp
+    copyright-holders: Curt Coder
+  Cia6526.kt: src/devices/machine/mos6526.cpp
+    copyright-holders: Curt Coder
+
+  license: BSD-3-Clause
+
+------------------------------------------------------------------------------
+Test fixtures (cpu/src/jvmTest/resources/reference/), used only by tests and
+not included in any built library:
+
+- 6502-vectors.jsonl.gz: SingleStepTests 65x02,
+  Copyright (c) 2024 Thomas Harte et al. MIT License.
+- 6502_functional_test.bin, 6502_functional_test.a65: Klaus Dormann's 6502
+  functional test. GNU General Public License v3.0 or later.
+
+Provenance and pinned versions: cpu/src/jvmTest/resources/reference/README.md.
+
+------------------------------------------------------------------------------
+Gradle wrapper (gradlew, gradlew.bat, gradle/wrapper/):
+Copyright 2015-2021 the original authors. Apache License, Version 2.0.

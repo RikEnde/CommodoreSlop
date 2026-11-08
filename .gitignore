@@ -1,0 +1,31 @@
+# Gradle and Kotlin build output and caches
+.gradle/
+**/build/
+.kotlin/
+.gradletasknamecache
+gradle-app.setting
+local.properties
+
+# Local toolchains (e.g. a bundled JDK)
+.tools/
+
+# IDEs and editors
+.idea/
+*.iml
+.project
+.classpath
+.claude/
+
+# OS files
+.DS_Store
+
+# JVM crash and heap dumps
+hs_err_pid*.log
+*.hprof
+
+# Track only the ROMs the emulator needs; other images (backups,
+# alternative dumps) stay local.
+roms/*
+!roms/basic.rom
+!roms/chargen.rom
+!roms/kernal.rom

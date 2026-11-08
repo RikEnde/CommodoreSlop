@@ -1,0 +1,9 @@
+# Line endings for the Gradle wrapper scripts, whatever core.autocrlf says.
+/gradlew   text eol=lf
+*.bat      text eol=crlf
+
+# Binary files: never convert or diff as text.
+*.jar      binary
+*.rom      binary
+*.bin      binary
+*.gz       binary

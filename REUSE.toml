@@ -1,0 +1,48 @@
+# Licensing for files that can't carry their own SPDX header.
+# Format: https://reuse.software/spec-3.3/
+# Source files carry SPDX headers; our own files are BSD-3-Clause.
+version = 1
+
+[[annotations]]
+path = [
+    "**/*.md",
+    "NOTICE",
+    "REUSE.toml",
+    ".gitignore",
+    ".gitattributes",
+    "gradle.properties",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 The C64slop contributors"
+SPDX-License-Identifier = "BSD-3-Clause"
+
+[[annotations]]
+path = ["roms/kernal.rom", "roms/basic.rom", "roms/chargen.rom"]
+precedence = "override"
+SPDX-FileCopyrightText = "1982 Commodore Business Machines"
+SPDX-License-Identifier = "LicenseRef-Commodore-ROM"
+
+[[annotations]]
+path = ["gradlew", "gradlew.bat", "gradle/wrapper/**"]
+precedence = "override"
+SPDX-FileCopyrightText = "2015-2021 the original authors (Gradle)"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = [
+    "cpu/src/jvmTest/resources/reference/6502-vectors.jsonl.gz",
+    "cpu/src/jvmTest/resources/reference/single-step-LICENSE.txt",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "2024 Thomas Harte et al."
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = [
+    "cpu/src/jvmTest/resources/reference/6502_functional_test.bin",
+    "cpu/src/jvmTest/resources/reference/6502_functional_test.a65",
+    "cpu/src/jvmTest/resources/reference/klaus-LICENSE.txt",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "Klaus Dormann"
+SPDX-License-Identifier = "GPL-3.0-or-later"
