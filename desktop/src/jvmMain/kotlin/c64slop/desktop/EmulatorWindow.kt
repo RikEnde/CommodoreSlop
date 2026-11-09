@@ -4,6 +4,7 @@
 
 package c64slop.desktop
 
+import c64slop.c64.Disk
 import c64slop.c64.KeyboardMatrix.Key
 import c64slop.c64.Tape
 import java.awt.BorderLayout
@@ -51,6 +52,9 @@ class EmulatorWindow(roms: Roms, private val options: Options) : Emulator.Listen
     @Volatile private var motorRunning = false
     private var tapeName: String? = null
     private var tapeKeys = TapeKeys.STOP
+    private var diskName: String? = null
+    private val writeProtectItem = JCheckBoxMenuItem("Write Protect")
+    @Volatile private var diskMotor = false
 
     fun show() {
         frame.defaultCloseOperation = WindowConstants.DISPOSE_ON_CLOSE
@@ -75,6 +79,7 @@ class EmulatorWindow(roms: Roms, private val options: Options) : Emulator.Listen
         frame.isVisible = true
         screen.requestFocusInWindow()
         options.tape?.let { insertTape(it) }
+        options.disk?.let { insertDisk(it) }
         options.program?.let { loadProgram(it, delayFrames = BOOT_FRAMES) }
         options.typeText?.let { emulator.type(it, delayFrames = BOOT_FRAMES) }
         emulator.start()
@@ -99,6 +104,23 @@ class EmulatorWindow(roms: Roms, private val options: Options) : Emulator.Listen
     override fun motorChanged(on: Boolean) {
         motorRunning = on
         SwingUtilities.invokeLater { updateTitle() }
+    }
+
+    override fun diskMotorChanged(on: Boolean) {
+        diskMotor = on
+        SwingUtilities.invokeLater { updateTitle() }
+    }
+
+    override fun diskSaveFailed(file: File, error: IOException) {
+        SwingUtilities.invokeLater {
+            JOptionPane.showMessageDialog(
+                frame,
+                "Couldn't save the disk to ${file.name}:\n${error.message ?: error}\n\n" +
+                    "Changes are no longer saved automatically. Use Disk > Save Disk As to keep them.",
+                "C64slop",
+                JOptionPane.ERROR_MESSAGE,
+            )
+        }
     }
 
     private fun log(e: KeyEvent, result: Any?) {
@@ -256,6 +278,7 @@ class EmulatorWindow(roms: Roms, private val options: Options) : Emulator.Listen
         })
         add(createKeysMenu())
         add(createTapeMenu())
+        add(createDiskMenu())
         add(JMenu("Joystick").apply {
             val group = ButtonGroup()
             for ((port, title) in listOf(0 to "None", 1 to "Port 1", 2 to "Port 2")) {
@@ -357,6 +380,33 @@ class EmulatorWindow(roms: Roms, private val options: Options) : Emulator.Listen
         })
     }
 
+    /** The 1541, device 8. */
+    private fun createDiskMenu() = JMenu("Disk").apply {
+        if (!emulator.hasDrive) {
+            isEnabled = false
+            toolTipText = "No disk drive: put dos1541.rom in the ROM directory"
+        }
+        add(item("Insert Disk...", shortcut(KeyEvent.VK_D)) { chooseDisk() })
+        add(item("New Blank Disk", null) {
+            emulator.insertDisk(Disk.blank(), null)
+            diskName = "blank disk"
+            writeProtectItem.isSelected = false
+            updateTitle()
+        })
+        add(item("Save Disk As...", null) { saveDisk() })
+        addSeparator()
+        add(writeProtectItem.apply {
+            toolTipText = "Writes fail with WRITE PROTECT ON, like a disk with its notch covered"
+            addActionListener { emulator.setWriteProtected(isSelected) }
+        })
+        add(item("Eject", null) {
+            emulator.ejectDisk()
+            diskName = null
+            writeProtectItem.isSelected = false
+            updateTitle()
+        })
+    }
+
     private fun setTapeKeys(keys: TapeKeys) {
         tapeKeys = keys
         emulator.setTapeKeys(play = keys == TapeKeys.PLAY, record = keys == TapeKeys.RECORD)
@@ -389,6 +439,8 @@ class EmulatorWindow(roms: Roms, private val options: Options) : Emulator.Listen
             (if (tapeKeys != TapeKeys.STOP) "  [${tapeKeys.name}]" else "") +
             (if (emulator.fastTape) "  [FAST]" else "") +
             (if (motorRunning) "  [MOTOR]" else "") +
+            (diskName?.let { "  [8: $it]" } ?: "") +
+            (if (diskMotor) "  [DISK]" else "") +
             (if (emulator.paused) "  (paused)" else "")
     }
 
@@ -435,6 +487,58 @@ class EmulatorWindow(roms: Roms, private val options: Options) : Emulator.Listen
                     updateTitle()
                 } catch (e: IOException) {
                     JOptionPane.showMessageDialog(frame, "Couldn't save ${file.name}:\n${e.message ?: e}", "Save Tape", JOptionPane.ERROR_MESSAGE)
+                }
+            }
+        }
+        screen.requestFocusInWindow()
+    }
+
+    private fun chooseDisk() {
+        val dialog = FileDialog(frame, "Insert Disk", FileDialog.LOAD)
+        dialog.directory = defaultDiskDirectory().path
+        dialog.isVisible = true
+        val name = dialog.file
+        if (name != null) insertDisk(File(dialog.directory, name))
+        screen.requestFocusInWindow()
+    }
+
+    private fun insertDisk(file: File) {
+        try {
+            val disk = DiskFile.load(file)
+            // A disk inside the app keeps its changes in memory until Save Disk As.
+            emulator.insertDisk(disk, file.takeUnless(::isBundled))
+            diskName = file.name
+            writeProtectItem.isSelected = disk.writeProtected
+            updateTitle()
+        } catch (e: IOException) {
+            JOptionPane.showMessageDialog(frame, "Couldn't load ${file.name}:\n${e.message ?: e}", "Insert Disk", JOptionPane.ERROR_MESSAGE)
+        }
+    }
+
+    /** Writes the disk to a D64 file, which then keeps receiving its changes. */
+    private fun saveDisk() {
+        val dialog = FileDialog(frame, "Save Disk As", FileDialog.SAVE)
+        dialog.directory = saveDirectory(defaultDiskDirectory()).path
+        dialog.file = diskName?.takeIf { it.endsWith(".d64") } ?: "disk.d64"
+        dialog.isVisible = true
+        val name = dialog.file
+        if (name == null) {
+            screen.requestFocusInWindow()
+            return
+        }
+        val chosen = File(dialog.directory, if (name.endsWith(".d64")) name else "$name.d64")
+        if (isBundled(chosen)) {
+            JOptionPane.showMessageDialog(frame, "Disks can't be saved inside the app. Choose another folder.", "Save Disk", JOptionPane.ERROR_MESSAGE)
+            screen.requestFocusInWindow()
+            return
+        }
+        emulator.saveDiskAs(chosen) { error ->
+            SwingUtilities.invokeLater {
+                if (error != null) {
+                    JOptionPane.showMessageDialog(frame, "Couldn't save ${chosen.name}:\n${error.message ?: error}", "Save Disk", JOptionPane.ERROR_MESSAGE)
+                } else {
+                    diskName = chosen.name
+                    updateTitle()
                 }
             }
         }
@@ -524,6 +628,10 @@ class EmulatorWindow(roms: Roms, private val options: Options) : Emulator.Listen
             Tapes: insert one from the Tape menu, type LOAD and RETURN, then Tape > Play.
             To save, use Tape > New Blank Tape, SAVE "NAME", Tape > Record, then Tape > Save Tape As.
             Tape > Fast Loading skips the wait; [MOTOR] shows the motor is running.
+
+            Disks: insert a D64 from the Disk menu, then LOAD "$",8 and LIST for the directory,
+            and LOAD "NAME",8 (or LOAD "*",8 for the first file) and RUN.
+            Changes are saved back to the image file; [DISK] shows the drive is running.
             """.trimIndent(),
             "Keyboard",
             JOptionPane.PLAIN_MESSAGE,

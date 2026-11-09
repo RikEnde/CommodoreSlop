@@ -17,13 +17,13 @@ SPDX-FileCopyrightText = "2026 The C64slop contributors"
 SPDX-License-Identifier = "BSD-3-Clause"
 
 [[annotations]]
-path = ["roms/kernal.rom", "roms/basic.rom", "roms/chargen.rom"]
+path = ["roms/kernal.rom", "roms/basic.rom", "roms/chargen.rom", "roms/dos1541.rom"]
 precedence = "override"
-SPDX-FileCopyrightText = "1982 Commodore Business Machines"
+SPDX-FileCopyrightText = "1982-1985 Commodore Business Machines"
 SPDX-License-Identifier = "LicenseRef-Commodore-ROM"
 
 [[annotations]]
-path = ["tapes/trex64.tap", "tapes/trex64-LICENSE.txt"]
+path = ["tapes/trex64.tap", "tapes/trex64-LICENSE.txt", "disks/trex64.d64", "disks/trex64-LICENSE.txt"]
 precedence = "override"
 SPDX-FileCopyrightText = "2021 Maciej Malecki"
 SPDX-License-Identifier = "MIT"

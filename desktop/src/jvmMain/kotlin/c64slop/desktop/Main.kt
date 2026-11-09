@@ -21,11 +21,13 @@ import kotlin.system.exitProcess
 const val BOOT_FRAMES = 150
 
 const val USAGE = """Usage: c64slop [options]
-  --roms DIR          Directory with kernal.rom, basic.rom and chargen.rom (default: built in)
+  --roms DIR          Directory with kernal.rom, basic.rom, chargen.rom and dos1541.rom (default: built in)
   --scale 1|2|3       Window size; 1 is 384 x 272 (default: 2)
   --screenshot FILE   Run without a window, save a PNG of the picture, then exit
   --frames N          50ths of a second to run before the screenshot (default: 200)
   --tape FILE         Put a TAP cassette image in the datasette
+  --disk FILE         Put a D64 disk image in the 1541, drive 8
+  --no-drive          Leave out the 1541, even if dos1541.rom is there
   --prg FILE          Load a PRG program after boot, and RUN it if it is BASIC
   --type TEXT         Type TEXT after boot; \n starts a new line
   --joystick 1|2      Arrow keys and Space work a joystick in port 1 or 2
@@ -41,6 +43,8 @@ data class Options(
     val logKeys: Boolean = false,
     val sound: Boolean = true,
     val tape: File? = null,
+    val disk: File? = null,
+    val drive: Boolean = true,
     val program: File? = null,
     val typeText: String? = null,
     /** 0 for none, else the port the arrow keys work. */
@@ -62,6 +66,8 @@ data class Options(
                     "--log-keys" -> options.copy(logKeys = true)
                     "--no-sound" -> options.copy(sound = false)
                     "--tape" -> options.copy(tape = File(value()))
+                    "--disk" -> options.copy(disk = File(value()))
+                    "--no-drive" -> options.copy(drive = false)
                     "--prg" -> options.copy(program = File(value()))
                     "--type" -> options.copy(typeText = value().replace("\\n", "\n"))
                     "--joystick" -> options.copy(joystickPort = value().toIntOrNull()?.takeIf { it in 1..2 }
@@ -80,26 +86,32 @@ data class Options(
 }
 
 /**
- * The ROMs (© Commodore): the KERNAL, BASIC V2 and the character generator.
- * The build copies roms/kernal.rom, roms/basic.rom and roms/chargen.rom into
- * the jar, so it runs from anywhere; --roms DIR reads them from a directory
- * instead.
+ * The ROMs (© Commodore): the KERNAL, BASIC V2 and the character generator,
+ * and the 1541's DOS, which gives the machine a disk drive if present. The
+ * build copies roms/kernal.rom, roms/basic.rom, roms/chargen.rom and
+ * roms/dos1541.rom into the jar, so it runs from anywhere; --roms DIR reads
+ * them from a directory instead.
  */
-class Roms(val kernal: ByteArray, val basic: ByteArray, val chargen: ByteArray) {
-    fun newMachine() = C64Machine(kernal, basic, chargen)
+class Roms(val kernal: ByteArray, val basic: ByteArray, val chargen: ByteArray, val dos: ByteArray?) {
+    fun newMachine() = C64Machine(kernal, basic, chargen, dos)
 
     companion object {
+        const val DOS = "dos1541.rom"
         private const val RESOURCES = "/c64slop/roms/"
 
-        /** Each ROM and its size: 8 KiB for the KERNAL and BASIC, 4 KiB for the characters. */
-        private val SIZES = mapOf("kernal.rom" to 0x2000, "basic.rom" to 0x2000, "chargen.rom" to 0x1000)
+        /** Each ROM and its size: 8 KiB for the KERNAL and BASIC, 4 KiB for the characters, 16 KiB for the DOS. */
+        private val SIZES = mapOf("kernal.rom" to 0x2000, "basic.rom" to 0x2000, "chargen.rom" to 0x1000, DOS to 0x4000)
 
-        /** Loads the ROMs from [directory], or the built-in ones if it is null. */
-        fun load(directory: File?): Roms {
+        /**
+         * Loads the ROMs from [directory], or the built-in ones if it is null.
+         * Without [drive], or without dos1541.rom, there is no disk drive.
+         */
+        fun load(directory: File?, drive: Boolean = true): Roms {
+            fun builtIn(name: String) = Roms::class.java.getResourceAsStream(RESOURCES + name)
+            val hasDos = if (directory == null) builtIn(DOS)?.use { true } == true else File(directory, DOS).isFile
             fun read(name: String): ByteArray {
                 val (where, bytes) = if (directory == null) {
-                    val stream = Roms::class.java.getResourceAsStream(RESOURCES + name)
-                        ?: throw IOException("The built-in $name is missing from the jar")
+                    val stream = builtIn(name) ?: throw IOException("The built-in $name is missing from the jar")
                     "Built-in $name" to stream.use { it.readBytes() }
                 } else {
                     val file = File(directory, name)
@@ -110,7 +122,7 @@ class Roms(val kernal: ByteArray, val basic: ByteArray, val chargen: ByteArray) 
                 if (bytes.size != size) throw IOException("$where must be ${size / 1024} KiB, was ${bytes.size} bytes")
                 return bytes
             }
-            return Roms(read("kernal.rom"), read("basic.rom"), read("chargen.rom"))
+            return Roms(read("kernal.rom"), read("basic.rom"), read("chargen.rom"), if (drive && hasDos) read(DOS) else null)
         }
     }
 }
@@ -130,6 +142,9 @@ private fun mediaDirectory(name: String): File {
 /** Where Insert Tape starts browsing. */
 fun defaultTapeDirectory(): File = mediaDirectory("tapes")
 
+/** Where Insert Disk starts browsing. */
+fun defaultDiskDirectory(): File = mediaDirectory("disks")
+
 /** Where Load Program starts browsing. */
 fun defaultProgramDirectory(): File = mediaDirectory("programs")
 
@@ -143,7 +158,8 @@ fun saveDirectory(directory: File): File {
 /**
  * True if [file] is inside the jar's directory, which only holds media in the
  * packaged app. Writing there would change the signed bundle (macOS then calls
- * the app damaged), and fails anyway in /Applications.
+ * the app damaged), and fails anyway in /Applications, so such disks are
+ * inserted without a backing file.
  */
 fun isBundled(file: File): Boolean {
     val app = jarDirectory()?.canonicalFile ?: return false
@@ -152,8 +168,9 @@ fun isBundled(file: File): Boolean {
 
 /**
  * Runs [Options.screenshotFrames] frames (50ths of a second) as fast as
- * possible, with the tape, program and text from [options], and writes the
- * picture to [file]. A tape plays only if the text starts it, with PLAY down.
+ * possible, with the tape, disk, program and text from [options], and writes
+ * the picture to [file]. A tape plays only if the text starts it, with PLAY
+ * down. Disk changes are not saved.
  */
 fun saveScreenshot(roms: Roms, options: Options, file: File) {
     val machine = roms.newMachine()
@@ -161,6 +178,7 @@ fun saveScreenshot(roms: Roms, options: Options, file: File) {
         machine.datasette.tape = TapeFile.load(it)
         machine.datasette.playDown = true
     }
+    options.disk?.let { machine.drive?.disk = DiskFile.load(it) }
     val typist = Typist()
     options.program?.let { programFile ->
         val program = ProgramFile.load(programFile)
@@ -191,14 +209,15 @@ fun main(args: Array<String>) {
         exitProcess(2)
     }
     val roms = try {
-        Roms.load(options.romDirectory)
+        Roms.load(options.romDirectory, options.drive)
     } catch (e: IOException) {
         val message = if (options.romDirectory == null) {
             "${e.message}\n\nThis build is incomplete. Pass --roms DIR with the C64 kernal.rom, " +
                 "basic.rom and chargen.rom."
         } else {
             "${e.message}\n\nPut the C64 kernal.rom (8 KiB), basic.rom (8 KiB) and chargen.rom (4 KiB) " +
-                "in that directory, or leave out --roms to use the built-in ones."
+                "in that directory, and dos1541.rom (16 KiB) for a disk drive, or leave out --roms " +
+                "to use the built-in ones."
         }
         System.err.println(message)
         if (options.screenshot == null && !GraphicsEnvironment.isHeadless()) {
@@ -206,11 +225,16 @@ fun main(args: Array<String>) {
         }
         exitProcess(1)
     }
+    if (roms.dos == null && options.disk != null) {
+        val where = options.romDirectory?.let { "put dos1541.rom in ${it.path}" } ?: "this build has no dos1541.rom"
+        System.err.println("--disk needs the 1541: $where, and don't pass --no-drive.")
+        exitProcess(2)
+    }
     options.screenshot?.let {
         try {
             saveScreenshot(roms, options, it)
         } catch (e: IOException) {
-            System.err.println("Couldn't load a tape or program: ${e.message}")
+            System.err.println("Couldn't load a tape, disk or program: ${e.message}")
             exitProcess(1)
         }
         println("Saved ${it.path}")

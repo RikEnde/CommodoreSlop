@@ -72,5 +72,8 @@ class MediaFilesTest {
         assertFailsWith<IllegalArgumentException> { Options.parse(arrayOf("--scale", "4")) }
         assertFailsWith<IllegalArgumentException> { Options.parse(arrayOf("--joystick")) }
         assertFailsWith<IllegalArgumentException> { Options.parse(arrayOf("--disc", "x.d64")) }
+        val disk = Options.parse(arrayOf("--disk", "x.d64", "--no-drive"))
+        assertEquals("x.d64", disk.disk?.path)
+        assertEquals(false, disk.drive)
     }
 }

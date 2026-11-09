@@ -82,6 +82,14 @@ $TMPDIR/gw.sh :cpu:jvmTest :c64:jvmTest
   Tests: `KeyMappingTest`, `EmulatorTest`, `MediaFilesTest`, `AppIconTest`,
   helper `TestRoms.kt`.
 - `.gitignore`, `.gitattributes`.
+- A real 1541 (device 8): `Drive1541.kt` (its own `Cpu6502`, 2 KiB RAM,
+  `roms/dos1541.rom`, two `Via6522` copied from Beebslop, wiring per MAME
+  `c1541.cpp`), `Disk.kt` (D64 <-> byte-aligned GCR tracks, blank disks),
+  `SerialBus` with attached devices, `Cpu6502.setOverflow()` (SO pin, byte
+  ready). The drive catches up with the C64 after each C64 cycle. Desktop:
+  `--disk`, `--no-drive`, Disk menu, `DiskFile`, saves on motor stop.
+  Tests: `DiskDriveRomTest` (c64), `DiskTest` (desktop: T-Rex D64 loads
+  byte-exact and runs; SAVE reaches the file). `disks/trex64.d64` shipped.
 - `tapes/trex64.tap`: T-Rex 64 (MIT, Maciej Malecki), recorded by our own
   KERNAL SAVE from the release's `rex.prg` and verified to load back; see
   `tapes/README.md`. It plays: title, joystick 2, scrolling and sprites all
@@ -98,5 +106,5 @@ $TMPDIR/gw.sh :cpu:jvmTest :c64:jvmTest
 2. Whether the Commodore ROMs stay in the repository is the user's decision.
 4. commonTest unit tests for the CIA, VIC-II registers, SID, memory bus,
    keyboard and TAP format.
-5. Later: a 1541 drive on the serial bus (it can reuse `Cpu6502` and
-   Beebslop's `Via6522`), cartridges.
+5. Later: cartridges; G64 images and bit-level GCR for copy protection; D64
+   error bytes; a fast-loader test (e.g. a game with its own drive code).

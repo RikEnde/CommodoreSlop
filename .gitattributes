@@ -9,3 +9,4 @@
 *.gz       binary
 *.tap      binary
 *.prg      binary
+*.d64      binary

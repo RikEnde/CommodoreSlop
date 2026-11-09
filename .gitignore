@@ -29,3 +29,4 @@ roms/*
 !roms/basic.rom
 !roms/chargen.rom
 !roms/kernal.rom
+!roms/dos1541.rom

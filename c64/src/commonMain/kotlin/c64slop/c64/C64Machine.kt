@@ -20,8 +20,13 @@ import c64slop.cpu.Cpu6502
  * - The 6510's own port ([ProcessorPort]) banks the ROMs and drives the
  *   datasette's motor and write line, and reads its keys.
  * - Both CIAs' time-of-day clocks count the 50 Hz mains.
+ * - Given [driveRom], a 1541 ([Drive1541]) is device 8 on the serial bus. It
+ *   runs at 1 MHz, a little faster than the C64's 985,248 Hz; after each C64
+ *   cycle it runs instructions until it has caught up, so the two stay within
+ *   an instruction of each other, which the serial protocol and fast loaders
+ *   tolerate.
  */
-class C64Machine(kernalRom: ByteArray, basicRom: ByteArray, charRom: ByteArray) {
+class C64Machine(kernalRom: ByteArray, basicRom: ByteArray, charRom: ByteArray, driveRom: ByteArray? = null) {
     val ram = ByteArray(0x10000)
     val colorRam = ByteArray(0x400)
     val clock = C64Clock()
@@ -56,8 +61,14 @@ class C64Machine(kernalRom: ByteArray, basicRom: ByteArray, charRom: ByteArray) 
     val bus = C64MemoryBus(ram, colorRam, basicRom, kernalRom, charRom, port, clock, vic)
     val cpu = Cpu6502(bus)
 
+    /** The 1541 on the serial bus, or null without a drive ROM. */
+    val drive: Drive1541? = driveRom?.let { Drive1541(it, serialBus) }
+
     private var nmiLine = false
     private var mainsPhase = 0
+
+    /** How far the drive is behind the C64, in units of 1/(985,248 × 1,000,000) s. */
+    private var driveLag = 0L
 
     init {
         // DRAM powers up in a pattern of alternating blocks; the KERNAL clears
@@ -74,13 +85,15 @@ class C64Machine(kernalRom: ByteArray, basicRom: ByteArray, charRom: ByteArray) 
     /**
      * Pull the RESET line, as a reset button on the user or cartridge port does
      * (the breadbin C64 has none of its own). It resets the CPU, both CIAs, the
-     * SID and the processor port; RAM and the VIC-II's registers survive.
+     * SID, the processor port, and the drive, which shares the line through the
+     * serial bus; RAM and the VIC-II's registers survive.
      */
     fun reset() {
         port.reset()
         cia1.reset()
         cia2.reset()
         sid.reset()
+        drive?.reset()
         cpu.reset()
     }
 
@@ -132,6 +145,10 @@ class C64Machine(kernalRom: ByteArray, basicRom: ByteArray, charRom: ByteArray) 
             mainsPhase -= C64Clock.CYCLES_PER_SECOND
             cia1.todPulse()
             cia2.todPulse()
+        }
+        drive?.let {
+            driveLag += Drive1541.CYCLES_PER_SECOND
+            while (driveLag > 0) driveLag -= it.step().toLong() * C64Clock.CYCLES_PER_SECOND
         }
     }
 

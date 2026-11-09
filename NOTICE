@@ -14,15 +14,20 @@ KeyMapping.kt, NaturalKeyboard.kt, AudioOutput.kt, MediaFiles.kt,
 AppIcon.kt (the drawing code; the computer is new), IconExport.kt), run.sh
 and desktop/build.gradle.kts.
 
+c64/.../Via6522.kt is copied from Beebslop, under the same license.
+
 The Commodore 64 ROM images (roms/kernal.rom, roms/basic.rom,
-roms/chargen.rom) are copyright Commodore Business Machines and are included
-without a licence; they are not covered by the BSD License. See
+roms/chargen.rom) and the 1541 disk drive's ROM image (roms/dos1541.rom) are
+copyright Commodore Business Machines and are included without a licence;
+they are not covered by the BSD License. See
 LICENSES/LicenseRef-Commodore-ROM.txt.
 
-The cassette image tapes/trex64.tap holds T-Rex 64 by Maciej Małecki, Zuza
-Małecka and Ola Małecka (https://github.com/maciejmalecki/trex64), Copyright
-(c) 2021 Maciej Malecki, under the MIT License (tapes/trex64-LICENSE.txt).
-C64slop recorded the released program onto the tape; see tapes/README.md.
+The cassette image tapes/trex64.tap and the disk image disks/trex64.d64 hold
+T-Rex 64 by Maciej Małecki, Zuza Małecka and Ola Małecka
+(https://github.com/maciejmalecki/trex64), Copyright (c) 2021 Maciej Malecki,
+under the MIT License (tapes/trex64-LICENSE.txt, disks/trex64-LICENSE.txt).
+The disk image is the released one; C64slop recorded the released program onto
+the tape. See tapes/README.md and disks/README.md.
 
 ------------------------------------------------------------------------------
 MAME
@@ -35,6 +40,8 @@ which use the same BSD 3-Clause License as C64slop. No MAME code is copied.
     src/mame/commodore/c64.cpp
     copyright-holders: Curt Coder
   Cia6526.kt: src/devices/machine/mos6526.cpp
+    copyright-holders: Curt Coder
+  Drive1541.kt: src/devices/bus/cbmiec/c1541.cpp
     copyright-holders: Curt Coder
 
   license: BSD-3-Clause
