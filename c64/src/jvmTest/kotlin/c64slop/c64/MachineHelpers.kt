@@ -9,16 +9,20 @@ import javax.imageio.ImageIO
 
 val romDirectory = File(System.getProperty("c64slop.romDirectory") ?: "roms")
 
-/** A fresh machine with the real ROMs, or null (and a message) if they are missing. */
-fun newMachine(): C64Machine? {
+/**
+ * A fresh machine with the real ROMs, or null (and a message) if they are
+ * missing. With [drive], a 1541 is device 8, which needs its ROM too.
+ */
+fun newMachine(drive: Boolean = false): C64Machine? {
     val kernal = File(romDirectory, "kernal.rom")
     val basic = File(romDirectory, "basic.rom")
     val chargen = File(romDirectory, "chargen.rom")
-    if (!kernal.isFile || !basic.isFile || !chargen.isFile) {
+    val dos = File(romDirectory, "dos1541.rom")
+    if (!kernal.isFile || !basic.isFile || !chargen.isFile || (drive && !dos.isFile)) {
         println("Skipping: C64 ROMs not found in ${romDirectory.absolutePath}")
         return null
     }
-    return C64Machine(kernal.readBytes(), basic.readBytes(), chargen.readBytes())
+    return C64Machine(kernal.readBytes(), basic.readBytes(), chargen.readBytes(), if (drive) dos.readBytes() else null)
 }
 
 /** Run [block] on a machine that has booted to `READY.`; skips without the ROMs. */

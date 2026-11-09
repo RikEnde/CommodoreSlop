@@ -62,6 +62,15 @@ class Cpu6502(private val bus: MemoryBus) {
         nmiPending = true
     }
 
+    /**
+     * The SO (set overflow) input: call once per falling edge, and V is set.
+     * The 1541 wires its byte-ready signal here, and its DOS waits for each
+     * byte from the disk with `BVC *`.
+     */
+    fun setOverflow() {
+        setFlag(StatusFlag.OVERFLOW, true)
+    }
+
     fun state(): CpuState = CpuState(accumulator, x, y, stackPointer, programCounter, status)
 
     /**

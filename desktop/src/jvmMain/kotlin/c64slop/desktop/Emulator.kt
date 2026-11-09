@@ -6,6 +6,7 @@ package c64slop.desktop
 
 import c64slop.c64.C64Clock
 import c64slop.c64.C64Machine
+import c64slop.c64.Disk
 import c64slop.c64.Joystick
 import c64slop.c64.KeyboardMatrix.Key
 import c64slop.c64.KeyboardText
@@ -14,6 +15,8 @@ import c64slop.c64.Tape
 import c64slop.c64.Typist
 import c64slop.c64.Vic6569
 import c64slop.c64.load
+import java.io.File
+import java.io.IOException
 import java.util.concurrent.ConcurrentLinkedQueue
 
 /**
@@ -26,6 +29,9 @@ import java.util.concurrent.ConcurrentLinkedQueue
  * without sound, the thread sleeps to match emulated time to wall time. With
  * [fastTape] on, it runs flat out while the cassette motor runs, so software
  * still sees the real timing and can't tell.
+ *
+ * A disk inserted from a file is saved back to it when the drive's motor stops
+ * after writing, when it is ejected, and when the emulator stops.
  */
 class Emulator(
     private val createMachine: () -> C64Machine,
@@ -41,7 +47,16 @@ class Emulator(
 
         /** Called on the emulation thread when the cassette motor starts or stops. */
         fun motorChanged(on: Boolean) {}
+
+        /** Called on the emulation thread when the 1541's motor starts or stops. */
+        fun diskMotorChanged(on: Boolean) {}
+
+        /** Called when a changed disk couldn't be written back to [file]; it stays in, unsaved. */
+        fun diskSaveFailed(file: File, error: IOException) {}
     }
+
+    /** The disk in the drive, and the file it is saved to, if any. */
+    private class Slot(val disk: Disk, var file: File?, var saved: Long)
 
     private val commands = ConcurrentLinkedQueue<(C64Machine) -> Unit>()
     private val frameLock = Any()
@@ -51,6 +66,8 @@ class Emulator(
     private var machine = createMachine()
     private var thread: Thread? = null
     private var motorRunning = false
+    private var slot: Slot? = null
+    private var diskMotor = false
 
     /** How many held host keys press each C64 key, as two can share one (Shift and Up). */
     private val held = mutableMapOf<Key, Int>()
@@ -79,6 +96,7 @@ class Emulator(
         running = false
         thread?.join(1000)
         thread = null
+        saveDisk()
     }
 
     /** Run [command] on the emulation thread before the next frame. */
@@ -191,7 +209,60 @@ class Emulator(
     /** The cassette as a TAP image, delivered to [receive] on the emulation thread. */
     fun exportTape(receive: (ByteArray?) -> Unit) = post { receive(it.datasette.tape?.toTap()) }
 
-    /** Switch off and on: fresh RAM and chips. The cassette stays in, with its keys as they were. */
+    /** Whether the machine has a disk drive (a 1541 ROM was found). */
+    val hasDrive: Boolean get() = machine.drive != null
+
+    /** Put [disk] in the drive; if [file] is given, changes are saved to it. */
+    fun insertDisk(disk: Disk, file: File?) = post {
+        saveDisk()
+        slot = Slot(disk, file, disk.changes)
+        it.drive?.disk = disk
+    }
+
+    fun ejectDisk() = post {
+        saveDisk()
+        slot = null
+        it.drive?.disk = null
+    }
+
+    fun setWriteProtected(on: Boolean) = post { slot?.disk?.writeProtected = on }
+
+    /**
+     * Write the disk to [file], and save later changes there too.
+     * [done] gets null, or the error, on the emulation thread.
+     */
+    fun saveDiskAs(file: File, done: (IOException?) -> Unit) = post {
+        val current = slot
+        if (current == null) {
+            done(IOException("There is no disk in the drive."))
+            return@post
+        }
+        try {
+            DiskFile.save(current.disk, file)
+            current.file = file
+            current.saved = current.disk.changes
+            done(null)
+        } catch (e: IOException) {
+            done(e)
+        }
+    }
+
+    /** Writes a changed disk back to its file. */
+    private fun saveDisk() {
+        val current = slot ?: return
+        val file = current.file ?: return
+        if (current.disk.changes == current.saved) return
+        current.saved = current.disk.changes
+        try {
+            DiskFile.save(current.disk, file)
+        } catch (e: IOException) {
+            // Don't keep failing: the disk stays in, and Save Disk As can still save it.
+            current.file = null
+            listener.diskSaveFailed(file, e)
+        }
+    }
+
+    /** Switch off and on: fresh RAM and chips. The cassette and disk stay in, the datasette's keys as they were. */
     fun powerCycle() = post { old ->
         typist.cancel(old)
         natural.reset()
@@ -202,6 +273,7 @@ class Emulator(
             fresh.datasette.playDown = old.datasette.playDown
             fresh.datasette.recordDown = old.datasette.recordDown
             fresh.keyboard.shiftLock = old.keyboard.shiftLock
+            fresh.drive?.disk = slot?.disk
         }
         paused = false
     }
@@ -285,6 +357,13 @@ class Emulator(
         if (motor != motorRunning) {
             motorRunning = motor
             listener.motorChanged(motor)
+        }
+        val spinning = machine.drive?.motorOn == true
+        if (spinning != diskMotor) {
+            diskMotor = spinning
+            listener.diskMotorChanged(spinning)
+            // The DOS stops the motor a moment after the last access: a good time to save.
+            if (!spinning) saveDisk()
         }
         if (machine.cpu.halted) {
             // Like the real machine, a jammed CPU leaves the display running and

@@ -27,7 +27,7 @@ tasks.withType<Test>().configureEach {
 // still overrides them). Only the ones the emulator uses: roms/ may hold others.
 val romResources = tasks.register<Sync>("romResources") {
     from(rootProject.file("roms")) {
-        include("kernal.rom", "basic.rom", "chargen.rom")
+        include("kernal.rom", "basic.rom", "chargen.rom", "dos1541.rom")
         into("c64slop/roms")
     }
     into(layout.buildDirectory.dir("generated/romResources"))
@@ -69,10 +69,14 @@ val packageOutput = layout.buildDirectory.dir("jpackage")
 val packageInputSync = tasks.register<Sync>("packageInput") {
     from(fatJar)
     // The media that ship with the repository, listed by name so that local
-    // extras stay out. Insert Tape opens here.
+    // extras stay out. Insert Tape and Insert Disk open here.
     from(rootProject.file("tapes")) {
         include("README.md", "trex64.tap", "trex64-LICENSE.txt")
         into("tapes")
+    }
+    from(rootProject.file("disks")) {
+        include("README.md", "trex64.d64", "trex64-LICENSE.txt")
+        into("disks")
     }
     into(packageInput)
 }
