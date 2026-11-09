@@ -68,6 +68,12 @@ val packageOutput = layout.buildDirectory.dir("jpackage")
 
 val packageInputSync = tasks.register<Sync>("packageInput") {
     from(fatJar)
+    // The media that ship with the repository, listed by name so that local
+    // extras stay out. Insert Tape opens here.
+    from(rootProject.file("tapes")) {
+        include("README.md", "trex64.tap", "trex64-LICENSE.txt")
+        into("tapes")
+    }
     into(packageInput)
 }
 

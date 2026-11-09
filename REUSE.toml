@@ -23,6 +23,12 @@ SPDX-FileCopyrightText = "1982 Commodore Business Machines"
 SPDX-License-Identifier = "LicenseRef-Commodore-ROM"
 
 [[annotations]]
+path = ["tapes/trex64.tap", "tapes/trex64-LICENSE.txt"]
+precedence = "override"
+SPDX-FileCopyrightText = "2021 Maciej Malecki"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
 path = ["gradlew", "gradlew.bat", "gradle/wrapper/**"]
 precedence = "override"
 SPDX-FileCopyrightText = "2015-2021 the original authors (Gradle)"

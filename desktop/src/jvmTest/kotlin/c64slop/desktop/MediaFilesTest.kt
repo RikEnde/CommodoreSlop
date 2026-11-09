@@ -29,6 +29,16 @@ class MediaFilesTest {
     }
 
     @Test
+    fun shippedTapeIsIntact() {
+        val file = File("../tapes/trex64.tap")
+        if (!file.isFile) return println("Skipping: no ${file.absolutePath}")
+        val tape = TapeFile.load(file)
+        assertEquals(857_795, tape.length)
+        // KERNAL tapes start with a leader of short pulses, 0x30 units of 8 cycles.
+        assertTrue((0 until 1000).all { tape[it] in 0x28 * 8..0x38 * 8 }, "leader")
+    }
+
+    @Test
     fun loadsPrgFiles() {
         dir.mkdirs()
         val file = File(dir, "test.prg").apply { writeBytes(byteArrayOf(0x00, 0xC0.toByte(), 0x60)) }

@@ -82,6 +82,10 @@ $TMPDIR/gw.sh :cpu:jvmTest :c64:jvmTest
   Tests: `KeyMappingTest`, `EmulatorTest`, `MediaFilesTest`, `AppIconTest`,
   helper `TestRoms.kt`.
 - `.gitignore`, `.gitattributes`.
+- `tapes/trex64.tap`: T-Rex 64 (MIT, Maciej Malecki), recorded by our own
+  KERNAL SAVE from the release's `rex.prg` and verified to load back; see
+  `tapes/README.md`. It plays: title, joystick 2, scrolling and sprites all
+  work. (At GET READY it waits for joystick FIRE, not Space.)
 - Headless check: `java -jar desktop/build/libs/c64slop.jar --screenshot
   $TMPDIR/boot.png --type '...'` (build with `:desktop:fatJar`).
 

@@ -7,3 +7,5 @@
 *.rom      binary
 *.bin      binary
 *.gz       binary
+*.tap      binary
+*.prg      binary

@@ -34,6 +34,13 @@ SID. Its BASIC V2 came from Microsoft's 6502 BASIC; the KERNAL is Commodore's.
   format, which began with Per Håkan Sundell's CCS64. VICE is GPL, and none of
   its code is used here.
 
+## Tapes
+
+- **Maciej Małecki, Zuza Małecka and Ola Małecka**:
+  [T-Rex 64](https://github.com/maciejmalecki/trex64), released under the MIT
+  License, which made it possible to ship a game; see
+  [`tapes/README.md`](tapes/README.md).
+
 ## 6502 tests and references
 
 The CPU comes from [Beebslop](https://github.com/RikEnde/Beebslop), which took it
