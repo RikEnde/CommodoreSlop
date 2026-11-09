@@ -64,6 +64,33 @@ class EmulatorTest {
     }
 
     @Test
+    fun aQuickTapStillReachesTheC64() {
+        val roms = testRoms() ?: return
+        val emulator = Emulator(
+            createMachine = roms::newMachine,
+            soundEnabled = false,
+            listener = object : Emulator.Listener {
+                override fun frameReady(frameCount: Long) {}
+                override fun stopped(error: Throwable) = throw AssertionError(error)
+            },
+        )
+        emulator.start()
+        try {
+            emulator.waitFor("READY.", 10) { screen -> screen.any { it == "READY." } }
+            // The press and release reach the emulation thread together, between two
+            // frames, as a quick tap can when the thread runs a burst of frames.
+            for (key in listOf(c64slop.c64.KeyboardMatrix.Key.H, c64slop.c64.KeyboardMatrix.Key.I)) {
+                emulator.press(listOf(key))
+                emulator.release(listOf(key))
+                Thread.sleep(200)
+            }
+            emulator.waitFor("HI typed", 5) { screen -> screen.any { it == "HI" } }
+        } finally {
+            emulator.stop()
+        }
+    }
+
+    @Test
     fun runFrameRunsOneWholeFrame() {
         val machine: C64Machine = testRoms()?.newMachine() ?: return
         Emulator.runFrame(machine)

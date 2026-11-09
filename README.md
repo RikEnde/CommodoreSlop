@@ -12,9 +12,9 @@ and headless tests that run the real ROMs.
 ./run.sh                           # open the emulator window
 ./run.sh --scale 3                 # a 1152 x 816 window
 ./run.sh --screenshot boot.png     # no window: boot, save a PNG, exit
-./run.sh --prg game.prg --joystick 2                  # load and run a program
-./run.sh --disk disks/trex64.d64 --type 'LOAD"*",8\n' --joystick 2   # load from disk
-./run.sh --tape tapes/trex64.tap --type 'LOAD\n' --joystick 2       # load from tape
+./run.sh --prg game.prg                              # load and run a program
+./run.sh --disk disks/trex64.d64 --type 'LOAD"*",8\n' # load from disk
+./run.sh --tape tapes/trex64.tap --type 'LOAD\n'     # load from tape
 ./run.sh --help
 ```
 
@@ -35,7 +35,7 @@ To run without Gradle or Java installed, see [Standalone app](#standalone-app).
 | `--no-drive` | Leave out the 1541, even if `dos1541.rom` is there |
 | `--prg FILE` | Load a PRG program after boot, and `RUN` it if it is BASIC |
 | `--type TEXT` | Type TEXT after boot; `\n` starts a new line |
-| `--joystick 1\|2` | The arrow keys and Space work a joystick in port 1 or 2 |
+| `--joystick 0\|1\|2` | The port the arrow keys and Space work as a joystick; 0 for none, so the arrows are the cursor keys (default: 2) |
 | `--no-sound` | Run without sound |
 | `--log-keys` | Print each host key event and the C64 key it maps to |
 
@@ -71,15 +71,18 @@ There are two layouts, chosen in **Keys > Keyboard Layout**:
 | `: ;` | `;` and `'` in the Physical layout |
 | `←` | `` ` `` |
 | f1-f8 | F1-F8 (on a Mac, hold fn if they control the screen or sound) |
-| Cursor keys | Arrows; Left and Up press SHIFT for you |
+| Cursor keys | Arrows, with **Joystick > None**; Left and Up press SHIFT for you |
 
 As on the real machine, a letter typed without SHIFT is a capital, and with
 SHIFT a graphics character; C= + SHIFT switches to the lower-case character set.
 Paste as Typing types letters in either case as capitals, so listings paste
 whatever their case, and skips characters the C64 can't type, such as `{`.
 
-With a joystick on, the arrow keys move it and Space fires; the title bar shows
-`[JOYSTICK 2]`. Most games use port 2.
+No joystick is needed: the arrow keys act as one in port 2, where most games
+read it, and Space is its fire button as well as the C64's own Space, so screens
+that say "press SPACE" work too. The title bar shows `[JOYSTICK 2]`. To use the
+arrows as the C64's cursor keys, for editing BASIC, choose **Joystick > None**
+(or pass `--joystick 0`); **Port 1** is for the few games that read that port.
 
 ### Programs
 

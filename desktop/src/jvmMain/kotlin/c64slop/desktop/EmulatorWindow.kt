@@ -5,6 +5,7 @@
 package c64slop.desktop
 
 import c64slop.c64.Disk
+import c64slop.c64.Joystick
 import c64slop.c64.KeyboardMatrix.Key
 import c64slop.c64.Tape
 import java.awt.BorderLayout
@@ -46,6 +47,11 @@ class EmulatorWindow(roms: Roms, private val options: Options) : Emulator.Listen
     private val isMac = System.getProperty("os.name").startsWith("Mac")
     private val pauseItem = JCheckBoxMenuItem("Pause")
     private val shiftLockItem = JCheckBoxMenuItem("SHIFT LOCK  (Caps Lock)")
+    /**
+     * Host keys down now, by code and location. A held key repeats its press
+     * events, but is released once; repeats must not press again.
+     */
+    private val heldHostKeys = mutableSetOf<Int>()
     private var naturalLayout = false
     private var shiftLock = false
     private var joystickPort = options.joystickPort
@@ -71,7 +77,7 @@ class EmulatorWindow(roms: Roms, private val options: Options) : Emulator.Listen
         screen.addKeyListener(keyListener)
         screen.addFocusListener(object : FocusAdapter() {
             // Keys released while another window has focus never reach us.
-            override fun focusLost(e: FocusEvent) = emulator.releaseAll()
+            override fun focusLost(e: FocusEvent) = releaseAll()
         })
         updateTitle()
         frame.pack()
@@ -157,6 +163,9 @@ class EmulatorWindow(roms: Roms, private val options: Options) : Emulator.Listen
             // Leave Command shortcuts to the menu bar.
             if (e.isMetaDown) return
             e.consume()
+            // The host repeats a held key; the C64's KERNAL has its own auto-repeat.
+            // Caps Lock reports a press each time it turns on, so it isn't a repeat.
+            if (!heldHostKeys.add(hostKey(e)) && !KeyMapping.isShiftLock(e.keyCode)) return
             if (KeyMapping.isRestore(e.keyCode)) {
                 emulator.setRestore(true)
                 return
@@ -165,11 +174,11 @@ class EmulatorWindow(roms: Roms, private val options: Options) : Emulator.Listen
                 hostCapsLock(down = true)
                 return
             }
-            if (joystickPort != 0) {
-                KeyMapping.joystickDirection(e.keyCode)?.let {
-                    emulator.joystick(joystickPort, it, down = true)
-                    return
-                }
+            val direction = if (joystickPort != 0) KeyMapping.joystickDirection(e.keyCode) else null
+            if (direction != null) {
+                emulator.joystick(joystickPort, direction, down = true)
+                // Space is fire, and the C64's Space too, for screens that say "press SPACE".
+                if (direction != Joystick.Direction.FIRE) return
             }
             if (naturalLayout) {
                 val modifier = KeyMapping.naturalModifier(e.keyCode, e.keyLocation)
@@ -187,6 +196,7 @@ class EmulatorWindow(roms: Roms, private val options: Options) : Emulator.Listen
         override fun keyReleased(e: KeyEvent) {
             log(e, null)
             e.consume()
+            heldHostKeys.remove(hostKey(e))
             if (KeyMapping.isRestore(e.keyCode)) {
                 emulator.setRestore(false)
                 return
@@ -195,11 +205,10 @@ class EmulatorWindow(roms: Roms, private val options: Options) : Emulator.Listen
                 hostCapsLock(down = false)
                 return
             }
-            if (joystickPort != 0) {
-                KeyMapping.joystickDirection(e.keyCode)?.let {
-                    emulator.joystick(joystickPort, it, down = false)
-                    return
-                }
+            val direction = if (joystickPort != 0) KeyMapping.joystickDirection(e.keyCode) else null
+            if (direction != null) {
+                emulator.joystick(joystickPort, direction, down = false)
+                if (direction != Joystick.Direction.FIRE) return
             }
             if (naturalLayout) {
                 val modifier = KeyMapping.naturalModifier(e.keyCode, e.keyLocation)
@@ -229,17 +238,26 @@ class EmulatorWindow(roms: Roms, private val options: Options) : Emulator.Listen
         updateTitle()
     }
 
+    /** A host key, told apart by where it is: the left and right Shift are different keys. */
+    private fun hostKey(e: KeyEvent): Int = e.keyCode * 8 + e.keyLocation
+
+    /** Let go of every key, on the C64 and in our record of the host's. */
+    private fun releaseAll() {
+        heldHostKeys.clear()
+        emulator.releaseAll()
+    }
+
     private fun setNaturalLayout(natural: Boolean) {
         naturalLayout = natural
         // Keys held now would never be released by the other layout's handling.
-        emulator.releaseAll()
+        releaseAll()
         updateTitle()
         screen.requestFocusInWindow()
     }
 
     private fun setJoystickPort(port: Int) {
         joystickPort = port
-        emulator.releaseAll()
+        releaseAll()
         updateTitle()
         screen.requestFocusInWindow()
     }
@@ -283,7 +301,11 @@ class EmulatorWindow(roms: Roms, private val options: Options) : Emulator.Listen
             val group = ButtonGroup()
             for ((port, title) in listOf(0 to "None", 1 to "Port 1", 2 to "Port 2")) {
                 val choice = JRadioButtonMenuItem(title, port == joystickPort)
-                choice.toolTipText = if (port == 0) "Arrow keys and Space go to the keyboard" else "Arrow keys move the joystick, Space fires"
+                choice.toolTipText = if (port == 0) {
+                    "The arrow keys are the C64's cursor keys"
+                } else {
+                    "The arrow keys move a joystick in port $port; Space fires, and is the C64's Space too"
+                }
                 choice.addActionListener { setJoystickPort(port) }
                 group.add(choice)
                 add(choice)
@@ -617,9 +639,11 @@ class EmulatorWindow(roms: Roms, private val options: Options) : Emulator.Listen
             SHIFT LOCK       Caps Lock
             £ and =          Insert and Page Down
             f1-f8            F1-F8   (on a Mac, hold fn if they work the screen or sound)
-            Cursor keys      Arrows; Left and Up press SHIFT for you
+            Cursor keys      Arrows, with Joystick > None; Left and Up press SHIFT for you
 
-            With a joystick on (Joystick menu), the arrows move it and Space fires.
+            No joystick needed: the arrow keys act as one in port 2, where most games read it,
+            and Space is its fire button as well as the C64's Space. To use the arrows as
+            the C64's cursor keys (to edit BASIC), choose Joystick > None.
 
             Paste as Typing types text from the clipboard, letters in either case as capitals.
 

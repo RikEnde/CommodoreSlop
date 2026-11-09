@@ -69,8 +69,18 @@ class Emulator(
     private var slot: Slot? = null
     private var diskMotor = false
 
-    /** How many held host keys press each C64 key, as two can share one (Shift and Up). */
-    private val held = mutableMapOf<Key, Int>()
+    /**
+     * An input held down: a C64 key, a joystick switch or RESTORE. [count] host
+     * keys hold it, as two can share one (Shift and Up); it went down after
+     * frame [since].
+     */
+    private class Hold(var count: Int, val since: Long)
+
+    /** Inputs held down now, by key, by port and direction, or [RESTORE]. */
+    private val holds = mutableMapOf<Any, Hold>()
+
+    /** Inputs let go too soon, and the frame and action that let them go. */
+    private val pendingReleases = mutableMapOf<Any, Pair<Long, (C64Machine) -> Unit>>()
 
     /** Frames left until RESTORE is let go, after a RUN/STOP + RESTORE from the menu. */
     private var restoreFrames = 0
@@ -103,26 +113,53 @@ class Emulator(
     fun post(command: (C64Machine) -> Unit) { commands += command }
 
     fun press(keys: List<Key>) = post { machine ->
-        for (key in keys) {
-            held[key] = (held[key] ?: 0) + 1
-            machine.keyboard.press(key)
-        }
+        for (key in keys) hold(key, machine) { it.keyboard.press(key) }
     }
 
     fun release(keys: List<Key>) = post { machine ->
-        for (key in keys) {
-            val count = (held[key] ?: continue) - 1
-            if (count > 0) {
-                held[key] = count
-            } else {
-                held -= key
-                machine.keyboard.release(key)
-            }
-        }
+        for (key in keys) letGo(key, machine) { it.keyboard.release(key) }
     }
 
     /** RESTORE, which pulls NMI low while it is down. */
-    fun setRestore(down: Boolean) = post { it.keyboard.restore = down }
+    fun setRestore(down: Boolean) = post { machine ->
+        if (down) hold(RESTORE, machine) { it.keyboard.restore = true } else letGo(RESTORE, machine) { it.keyboard.restore = false }
+    }
+
+    /** Hold [input] down, doing [down] if it wasn't already. */
+    private fun hold(input: Any, machine: C64Machine, down: (C64Machine) -> Unit) {
+        pendingReleases -= input
+        val current = holds[input]
+        if (current != null) {
+            current.count++
+        } else {
+            holds[input] = Hold(1, frameCount)
+            down(machine)
+        }
+    }
+
+    /**
+     * Let go of [input] once nothing holds it, doing [up]. A quick tap can reach
+     * this thread with its press and release together, between two frames, and
+     * the C64 would never see it; so an input stays down for at least
+     * [MIN_HOLD_FRAMES], long enough for the KERNAL's 60 Hz scan and for games
+     * that read the keyboard or joystick once a frame.
+     */
+    private fun letGo(input: Any, machine: C64Machine, up: (C64Machine) -> Unit) {
+        val current = holds[input] ?: return
+        if (--current.count > 0) return
+        holds -= input
+        val earliest = current.since + MIN_HOLD_FRAMES
+        if (frameCount >= earliest) up(machine) else pendingReleases[input] = earliest to up
+    }
+
+    /** Does the releases that are now due. */
+    private fun releaseDue(machine: C64Machine) {
+        val due = pendingReleases.filterValues { (frame, _) -> frameCount >= frame }
+        for ((input, release) in due) {
+            pendingReleases -= input
+            release.second(machine)
+        }
+    }
 
     fun setShiftLock(on: Boolean) = post { it.keyboard.shiftLock = on }
 
@@ -131,7 +168,8 @@ class Emulator(
         it.keyboard.releaseAll()
         it.joystick1.releaseAll()
         it.joystick2.releaseAll()
-        held.clear()
+        holds.clear()
+        pendingReleases.clear()
         natural.reset()
     }
 
@@ -140,9 +178,10 @@ class Emulator(
     fun naturalKeyUp(hostKey: Int) = post { natural.keyUp(hostKey) }
 
     /** Move the joystick in port 1 or 2. */
-    fun joystick(port: Int, direction: Joystick.Direction, down: Boolean) = post {
-        val stick = if (port == 1) it.joystick1 else it.joystick2
-        if (down) stick.press(direction) else stick.release(direction)
+    fun joystick(port: Int, direction: Joystick.Direction, down: Boolean) = post { machine ->
+        fun stick(m: C64Machine) = if (port == 1) m.joystick1 else m.joystick2
+        val input = port to direction
+        if (down) hold(input, machine) { stick(it).press(direction) } else letGo(input, machine) { stick(it).release(direction) }
     }
 
     /** A reset button on the user port: RAM survives, so a program in memory can often be restarted. */
@@ -266,7 +305,8 @@ class Emulator(
     fun powerCycle() = post { old ->
         typist.cancel(old)
         natural.reset()
-        held.clear()
+        holds.clear()
+        pendingReleases.clear()
         restoreFrames = 0
         machine = createMachine().also { fresh ->
             fresh.datasette.tape = old.datasette.tape
@@ -347,6 +387,7 @@ class Emulator(
     /** Runs one frame and publishes the picture; returns the elapsed cycles. */
     private fun runField(): Long {
         val machine = machine
+        releaseDue(machine)
         typist.onFrame(machine)
         natural.onFrame(machine.keyboard)
         if (restoreFrames > 0 && --restoreFrames == 0) machine.keyboard.restore = false
@@ -377,6 +418,12 @@ class Emulator(
     companion object {
         const val SAMPLE_RATE = 48_000
         private const val RESTORE_FRAMES = 5
+
+        /** The least time an input stays down: 3 frames, 60 ms. */
+        private const val MIN_HOLD_FRAMES = 3
+
+        /** RESTORE's place in the held inputs. */
+        private const val RESTORE = "RESTORE"
 
         /**
          * Runs one frame: on to the VIC-II's next wrap to raster line 0, which is

@@ -30,7 +30,8 @@ const val USAGE = """Usage: c64slop [options]
   --no-drive          Leave out the 1541, even if dos1541.rom is there
   --prg FILE          Load a PRG program after boot, and RUN it if it is BASIC
   --type TEXT         Type TEXT after boot; \n starts a new line
-  --joystick 1|2      Arrow keys and Space work a joystick in port 1 or 2
+  --joystick 0|1|2    The port the arrow keys and Space work as a joystick; 0 for none,
+                      so the arrows are the cursor keys (default: 2)
   --no-sound          Run without sound
   --log-keys          Print each host key event and the C64 key it maps to"""
 
@@ -47,8 +48,11 @@ data class Options(
     val drive: Boolean = true,
     val program: File? = null,
     val typeText: String? = null,
-    /** 0 for none, else the port the arrow keys work. */
-    val joystickPort: Int = 0,
+    /**
+     * The port the arrow keys and Space work as a joystick, or 0 for none.
+     * Port 2 by default, where most games read it.
+     */
+    val joystickPort: Int = 2,
 ) {
     companion object {
         fun parse(args: Array<String>): Options {
@@ -70,8 +74,8 @@ data class Options(
                     "--no-drive" -> options.copy(drive = false)
                     "--prg" -> options.copy(program = File(value()))
                     "--type" -> options.copy(typeText = value().replace("\\n", "\n"))
-                    "--joystick" -> options.copy(joystickPort = value().toIntOrNull()?.takeIf { it in 1..2 }
-                        ?: throw IllegalArgumentException("--joystick must be 1 or 2"))
+                    "--joystick" -> options.copy(joystickPort = value().toIntOrNull()?.takeIf { it in 0..2 }
+                        ?: throw IllegalArgumentException("--joystick must be 0, 1 or 2"))
                     "--help", "-h" -> {
                         println(USAGE)
                         exitProcess(0)

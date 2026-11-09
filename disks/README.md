@@ -19,11 +19,11 @@ To play it:
 2. Type `LOAD "*",8` and press RETURN. It loads in about a minute, at the
    KERNAL's real speed. `LOAD "$",8` then `LIST` shows the directory instead.
 3. At `READY.`, type `RUN`.
-4. Choose **Joystick > Port 2**: the arrow keys move the joystick and Space
-   fires. See [`tapes/README.md`](../tapes/README.md) for the controls.
+4. Play with the arrow keys and Space; see
+   [`tapes/README.md`](../tapes/README.md) for the controls.
 
-`./run.sh --disk disks/trex64.d64 --type 'LOAD"*",8\n' --joystick 2` does the
-first two steps for you.
+`./run.sh --disk disks/trex64.d64 --type 'LOAD"*",8\n'` does the first two
+steps for you.
 
 The emulator writes changes back to a disk image file. Make a copy first if you
 want to keep the original, or use **Disk > Write Protect**.
