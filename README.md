@@ -101,6 +101,15 @@ choose **Tape > Record**. **Tape > Save Tape As...** then writes the whole tape
 to a `.tap` file. **Rewind** lets the keys up, as on the real datasette;
 rewind before loading what you just saved.
 
+[`tapes/`](tapes/README.md) holds [T-Rex 64](https://github.com/maciejmalecki/trex64),
+an MIT-licensed game by Maciej Małecki, Zuza Małecka and Ola Małecka, recorded
+by C64slop's own KERNAL `SAVE`. [tapes/README.md](tapes/README.md) says how to
+load and play it:
+
+```sh
+./run.sh --tape tapes/trex64.tap --type 'LOAD\n' --joystick 2   # then Tape > Play
+```
+
 ### Standalone app
 
 ```sh
@@ -109,7 +118,8 @@ rewind before loading what you just saved.
 ```
 
 These build an app that needs neither Gradle nor Java: jpackage bundles a
-trimmed Java runtime. It contains the ROMs.
+trimmed Java runtime. It contains the ROMs and the tapes in `tapes/`, and
+**Insert Tape** opens on those.
 
 jpackage only builds for the OS it runs on, so `packageDmg` works on macOS only;
 on Windows and Linux, `packageApp` makes an app folder with the same contents.

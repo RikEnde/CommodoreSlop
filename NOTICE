@@ -19,6 +19,11 @@ roms/chargen.rom) are copyright Commodore Business Machines and are included
 without a licence; they are not covered by the BSD License. See
 LICENSES/LicenseRef-Commodore-ROM.txt.
 
+The cassette image tapes/trex64.tap holds T-Rex 64 by Maciej Małecki, Zuza
+Małecka and Ola Małecka (https://github.com/maciejmalecki/trex64), Copyright
+(c) 2021 Maciej Malecki, under the MIT License (tapes/trex64-LICENSE.txt).
+C64slop recorded the released program onto the tape; see tapes/README.md.
+
 ------------------------------------------------------------------------------
 MAME
 
