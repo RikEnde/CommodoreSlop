@@ -23,6 +23,20 @@ local.properties
 hs_err_pid*.log
 *.hprof
 
+# Your own tapes, disks and programs, never published.
+local/
+
+# Track only the media we may publish, each listed by name; anything else
+# put in tapes/ or disks/ stays local.
+tapes/*
+!tapes/README.md
+!tapes/trex64.tap
+!tapes/trex64-LICENSE.txt
+disks/*
+!disks/README.md
+!disks/trex64.d64
+!disks/trex64-LICENSE.txt
+
 # Track only the ROMs the emulator needs; other images (backups,
 # alternative dumps) stay local.
 roms/*
