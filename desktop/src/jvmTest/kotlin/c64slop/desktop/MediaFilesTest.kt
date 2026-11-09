@@ -77,5 +77,20 @@ class MediaFilesTest {
         val disk = Options.parse(arrayOf("--disk", "x.d64", "--no-drive"))
         assertEquals("x.d64", disk.disk?.path)
         assertEquals(false, disk.drive)
+        assertEquals(0xE5CD..0xE5FF, Options.parse(arrayOf("--disassemble", "E5CD-E5FF")).disassemble)
+        assertEquals(0xFFD2..0xFFD2, Options.parse(arrayOf("--disassemble", "\$FFD2")).disassemble)
+        assertFailsWith<IllegalArgumentException> { Options.parse(arrayOf("--disassemble", "FFFF-0000")) }
+        assertFailsWith<IllegalArgumentException> { Options.parse(arrayOf("--disassemble", "G000")) }
+        assertEquals(0x014E, Options.parse(arrayOf("--disassemble", "7C66-7CA0", "--origin", "014E")).origin)
+        assertFailsWith<IllegalArgumentException> { Options.parse(arrayOf("--origin", "014E")) }
+        assertFailsWith<IllegalArgumentException> { Options.parse(arrayOf("--disassemble", "7C66", "--origin", "10000")) }
+    }
+
+    @Test
+    fun disassemblesTheKernal() {
+        val roms = testRoms() ?: return
+        val machine = runHeadless(roms, Options(screenshotFrames = 1))
+        // CHROUT, in the KERNAL's jump table, goes through the vector at $0326.
+        assertEquals("FFD2  6C 26 03  JMP (\$0326)", disassemble(machine, 0xFFD2..0xFFD2))
     }
 }
