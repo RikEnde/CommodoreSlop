@@ -20,13 +20,12 @@ To play it:
 3. After `FOUND T-REX 64`, press C= (Option/Alt) or wait a few seconds. Loading
    takes about 6½ minutes at real speed; **Tape > Fast Loading** is much quicker.
 4. At `READY.`, type `RUN`.
-5. Choose **Joystick > Port 2**: the arrow keys move the joystick and Space
-   fires. FIRE or Up jumps, Down ducks; FIRE also starts each level at `GET
-   READY!`. On the title screen, f1 switches to keyboard control instead (Space
-   jumps, C= ducks), f3 turns the music off and f5 chooses the starting level.
+5. Space or Up jumps, Down ducks, and Space starts each level at `GET READY!`
+   (the arrow keys and Space act as the joystick in port 2). On the title
+   screen, f3 turns the music off and f5 chooses the starting level.
 
-`./run.sh --tape tapes/trex64.tap --type 'LOAD\n' --joystick 2` does the first
-steps for you: choose **Tape > Play** when the prompt appears.
+`./run.sh --tape tapes/trex64.tap --type 'LOAD\n'` does the first steps for
+you: choose **Tape > Play** when the prompt appears.
 
 ### Provenance
 

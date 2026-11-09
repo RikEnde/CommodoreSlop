@@ -71,6 +71,8 @@ class MediaFilesTest {
         assertEquals(false, options.sound)
         assertFailsWith<IllegalArgumentException> { Options.parse(arrayOf("--scale", "4")) }
         assertFailsWith<IllegalArgumentException> { Options.parse(arrayOf("--joystick")) }
+        assertEquals(2, Options.parse(arrayOf()).joystickPort, "the arrows are a joystick in port 2 by default")
+        assertEquals(0, Options.parse(arrayOf("--joystick", "0")).joystickPort)
         assertFailsWith<IllegalArgumentException> { Options.parse(arrayOf("--disc", "x.d64")) }
         val disk = Options.parse(arrayOf("--disk", "x.d64", "--no-drive"))
         assertEquals("x.d64", disk.disk?.path)
