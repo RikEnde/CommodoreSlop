@@ -8,6 +8,7 @@ import c64slop.c64.C64Machine
 import c64slop.c64.Typist
 import c64slop.c64.Vic6569
 import c64slop.c64.load
+import c64slop.cpu.Disassembler
 import java.awt.GraphicsEnvironment
 import java.awt.image.BufferedImage
 import java.io.File
@@ -24,7 +25,10 @@ const val USAGE = """Usage: c64slop [options]
   --roms DIR          Directory with kernal.rom, basic.rom, chargen.rom and dos1541.rom (default: built in)
   --scale 1|2|3       Window size; 1 is 384 x 272 (default: 2)
   --screenshot FILE   Run without a window, save a PNG of the picture, then exit
-  --frames N          50ths of a second to run before the screenshot (default: 200)
+  --disassemble A-B   Run without a window, then print the machine code from hex address
+                      A to B, as in --disassemble E5CD-E5FF
+  --origin ADDR       Number the listing from hex ADDR, for code that is copied there to run
+  --frames N          50ths of a second to run before the screenshot or listing (default: 200)
   --tape FILE         Put a TAP cassette image in the datasette
   --disk FILE         Put a D64 disk image in the 1541, drive 8
   --no-drive          Leave out the 1541, even if dos1541.rom is there
@@ -40,7 +44,12 @@ data class Options(
     val romDirectory: File? = null,
     val scale: Int = 2,
     val screenshot: File? = null,
+    /** Frames to run before the screenshot or the listing. */
     val screenshotFrames: Int = 200,
+    /** Addresses to disassemble after running headless, or null. */
+    val disassemble: IntRange? = null,
+    /** Where the code in [disassemble] runs from, if it is copied there first; null for where it is. */
+    val origin: Int? = null,
     val logKeys: Boolean = false,
     val sound: Boolean = true,
     val tape: File? = null,
@@ -67,7 +76,10 @@ data class Options(
                     "--screenshot" -> options.copy(screenshot = File(value()))
                     "--frames" -> options.copy(screenshotFrames = value().toIntOrNull()?.takeIf { it > 0 }
                         ?: throw IllegalArgumentException("--frames must be a positive number"))
-                    "--log-keys" -> options.copy(logKeys = true)
+                    "--disassemble" -> options.copy(disassemble = parseRange(value()))
+                    "--origin" -> options.copy(origin = address(value())
+                        ?: throw IllegalArgumentException("--origin needs a hex address, as in 014E"))
+                    "--log-keys" ->options.copy(logKeys = true)
                     "--no-sound" -> options.copy(sound = false)
                     "--tape" -> options.copy(tape = File(value()))
                     "--disk" -> options.copy(disk = File(value()))
@@ -84,7 +96,25 @@ data class Options(
                 }
                 i++
             }
+            if (options.origin != null && options.disassemble == null) {
+                throw IllegalArgumentException("--origin only goes with --disassemble")
+            }
             return options
+        }
+
+        /** A hex address such as `E5CD`, `$E5CD` or `0xE5CD`, or null. */
+        private fun address(text: String): Int? =
+            text.trim().removePrefix("$").removePrefix("0x").toIntOrNull(16)?.takeIf { it in 0..0xFFFF }
+
+        /** `E5CD-E5FF`, or `$E5CD-$E5FF`, in hex; a single address gives one byte's worth. */
+        private fun parseRange(text: String): IntRange {
+            val parts = text.split("-")
+            val start = address(parts[0])
+            val end = if (parts.size == 2) address(parts[1]) else start.takeIf { parts.size == 1 }
+            if (start == null || end == null || end < start) {
+                throw IllegalArgumentException("--disassemble needs hex addresses START-END, as in E5CD-E5FF")
+            }
+            return start..end
         }
     }
 }
@@ -170,13 +200,33 @@ fun isBundled(file: File): Boolean {
     return generateSequence(file.canonicalFile) { it.parentFile }.any { it == app }
 }
 
+/** Writes the picture after [runHeadless] to [file] as a PNG. */
+fun saveScreenshot(roms: Roms, options: Options, file: File) = saveScreenshot(runHeadless(roms, options), file)
+
+/** Writes [machine]'s last frame to [file] as a PNG. */
+fun saveScreenshot(machine: C64Machine, file: File) {
+    val view = ScreenPanel.VIEW
+    val image = BufferedImage(view.width, view.height, BufferedImage.TYPE_INT_RGB)
+    image.setRGB(0, 0, view.width, view.height, machine.vic.pixels, view.y * Vic6569.WIDTH + view.x, Vic6569.WIDTH)
+    file.absoluteFile.parentFile?.mkdirs()
+    ImageIO.write(image, "png", file)
+}
+
 /**
- * Runs [Options.screenshotFrames] frames (50ths of a second) as fast as
- * possible, with the tape, disk, program and text from [options], and writes
- * the picture to [file]. A tape plays only if the text starts it, with PLAY
- * down. Disk changes are not saved.
+ * A listing of [range] as the CPU sees memory after [runHeadless]: RAM, ROM or
+ * I/O, as the banking is then. Reading for it changes nothing. The listing
+ * numbers the code from [origin], where it will run once copied.
  */
-fun saveScreenshot(roms: Roms, options: Options, file: File) {
+fun disassemble(machine: C64Machine, range: IntRange, origin: Int = range.first): String =
+    Disassembler(machine.bus::peek).listing(range.first, range.last, origin)
+
+/**
+ * Builds a machine and runs [Options.screenshotFrames] frames (50ths of a
+ * second) as fast as possible, with the tape, disk, program and text from
+ * [options]. A tape plays only if the text starts it, with PLAY down. Disk
+ * changes are not saved.
+ */
+fun runHeadless(roms: Roms, options: Options): C64Machine {
     val machine = roms.newMachine()
     options.tape?.let {
         machine.datasette.tape = TapeFile.load(it)
@@ -194,11 +244,7 @@ fun saveScreenshot(roms: Roms, options: Options, file: File) {
         typist.onFrame(machine)
         Emulator.runFrame(machine)
     }
-    val view = ScreenPanel.VIEW
-    val image = BufferedImage(view.width, view.height, BufferedImage.TYPE_INT_RGB)
-    image.setRGB(0, 0, view.width, view.height, machine.vic.pixels, view.y * Vic6569.WIDTH + view.x, Vic6569.WIDTH)
-    file.absoluteFile.parentFile?.mkdirs()
-    ImageIO.write(image, "png", file)
+    return machine
 }
 
 fun main(args: Array<String>) {
@@ -234,14 +280,18 @@ fun main(args: Array<String>) {
         System.err.println("--disk needs the 1541: $where, and don't pass --no-drive.")
         exitProcess(2)
     }
-    options.screenshot?.let {
-        try {
-            saveScreenshot(roms, options, it)
+    if (options.screenshot != null || options.disassemble != null) {
+        val machine = try {
+            runHeadless(roms, options)
         } catch (e: IOException) {
             System.err.println("Couldn't load a tape, disk or program: ${e.message}")
             exitProcess(1)
         }
-        println("Saved ${it.path}")
+        options.disassemble?.let { println(disassemble(machine, it, options.origin ?: it.first)) }
+        options.screenshot?.let {
+            saveScreenshot(machine, it)
+            println("Saved ${it.path}")
+        }
         return
     }
     SwingUtilities.invokeLater { EmulatorWindow(roms, options).show() }

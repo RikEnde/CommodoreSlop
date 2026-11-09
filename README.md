@@ -29,7 +29,9 @@ To run without Gradle or Java installed, see [Standalone app](#standalone-app).
 | `--roms DIR` | Directory with `kernal.rom`, `basic.rom`, `chargen.rom` and `dos1541.rom` (default: built in) |
 | `--scale 1\|2\|3` | Window size; 1 is 384 x 272 (default: 2) |
 | `--screenshot FILE` | Run without a window, save a PNG of the picture, then exit |
-| `--frames N` | 50ths of a second to run before the screenshot (default: 200) |
+| `--disassemble A-B` | Run without a window, then print the machine code from hex address A to B, as in `--disassemble E5CD-E5FF` |
+| `--origin ADDR` | With `--disassemble`: number the listing from hex ADDR, for code that is copied there before it runs |
+| `--frames N` | 50ths of a second to run before the screenshot or listing (default: 200); a load from disk needs about 4000 |
 | `--tape FILE` | Put a TAP cassette image in the datasette |
 | `--disk FILE` | Put a D64 disk image in the 1541, drive 8 |
 | `--no-drive` | Leave out the 1541, even if `dos1541.rom` is there |
