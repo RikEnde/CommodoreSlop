@@ -119,15 +119,15 @@ object KeyMapping {
 
     /**
      * With a joystick on (port 2 by default), the arrows move it and don't
-     * reach the keyboard. Space fires, and is the C64's Space as well, for
-     * screens that say "press SPACE".
+     * reach the keyboard. Space and Enter fire, and are the C64's Space and
+     * RETURN as well, for screens that say "press SPACE" and for typing.
      */
     fun joystickDirection(keyCode: Int): Joystick.Direction? = when (keyCode) {
         KeyEvent.VK_UP -> Joystick.Direction.UP
         KeyEvent.VK_DOWN -> Joystick.Direction.DOWN
         KeyEvent.VK_LEFT -> Joystick.Direction.LEFT
         KeyEvent.VK_RIGHT -> Joystick.Direction.RIGHT
-        KeyEvent.VK_SPACE -> Joystick.Direction.FIRE
+        KeyEvent.VK_SPACE, KeyEvent.VK_ENTER -> Joystick.Direction.FIRE
         else -> null
     }
 

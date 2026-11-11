@@ -107,6 +107,7 @@ class KeyMappingTest {
         assertEquals(Joystick.Direction.UP, KeyMapping.joystickDirection(KeyEvent.VK_UP))
         assertEquals(Joystick.Direction.LEFT, KeyMapping.joystickDirection(KeyEvent.VK_LEFT))
         assertEquals(Joystick.Direction.FIRE, KeyMapping.joystickDirection(KeyEvent.VK_SPACE))
+        assertEquals(Joystick.Direction.FIRE, KeyMapping.joystickDirection(KeyEvent.VK_ENTER))
         assertNull(KeyMapping.joystickDirection(KeyEvent.VK_A))
     }
 

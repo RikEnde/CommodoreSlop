@@ -177,7 +177,7 @@ class EmulatorWindow(roms: Roms, private val options: Options) : Emulator.Listen
             val direction = if (joystickPort != 0) KeyMapping.joystickDirection(e.keyCode) else null
             if (direction != null) {
                 emulator.joystick(joystickPort, direction, down = true)
-                // Space is fire, and the C64's Space too, for screens that say "press SPACE".
+                // Space and Enter fire, and are the C64's Space and RETURN too.
                 if (direction != Joystick.Direction.FIRE) return
             }
             if (naturalLayout) {
@@ -304,7 +304,7 @@ class EmulatorWindow(roms: Roms, private val options: Options) : Emulator.Listen
                 choice.toolTipText = if (port == 0) {
                     "The arrow keys are the C64's cursor keys"
                 } else {
-                    "The arrow keys move a joystick in port $port; Space fires, and is the C64's Space too"
+                    "The arrow keys move a joystick in port $port; Space and Enter fire, and are the C64's Space and RETURN too"
                 }
                 choice.addActionListener { setJoystickPort(port) }
                 group.add(choice)
@@ -642,7 +642,7 @@ class EmulatorWindow(roms: Roms, private val options: Options) : Emulator.Listen
             Cursor keys      Arrows, with Joystick > None; Left and Up press SHIFT for you
 
             No joystick needed: the arrow keys act as one in port 2, where most games read it,
-            and Space is its fire button as well as the C64's Space. To use the arrows as
+            and Space and Enter are its fire button as well as the C64's Space and RETURN. To use the arrows as
             the C64's cursor keys (to edit BASIC), choose Joystick > None.
 
             Paste as Typing types text from the clipboard, letters in either case as capitals.

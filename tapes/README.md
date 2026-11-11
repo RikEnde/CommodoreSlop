@@ -21,7 +21,7 @@ To play it:
    takes about 6½ minutes at real speed; **Tape > Fast Loading** is much quicker.
 4. At `READY.`, type `RUN`.
 5. Space or Up jumps, Down ducks, and Space starts each level at `GET READY!`
-   (the arrow keys and Space act as the joystick in port 2). On the title
+   (the arrow keys act as the joystick in port 2, and Space or Enter fires). On the title
    screen, f3 turns the music off and f5 chooses the starting level.
 
 `./run.sh --tape tapes/trex64.tap --type 'LOAD\n'` does the first steps for
