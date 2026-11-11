@@ -37,7 +37,7 @@ To run without Gradle or Java installed, see [Standalone app](#standalone-app).
 | `--no-drive` | Leave out the 1541, even if `dos1541.rom` is there |
 | `--prg FILE` | Load a PRG program after boot, and `RUN` it if it is BASIC |
 | `--type TEXT` | Type TEXT after boot; `\n` starts a new line |
-| `--joystick 0\|1\|2` | The port the arrow keys and Space work as a joystick; 0 for none, so the arrows are the cursor keys (default: 2) |
+| `--joystick 0\|1\|2` | The port the arrow keys, Space and Enter work as a joystick; 0 for none, so the arrows are the cursor keys (default: 2) |
 | `--no-sound` | Run without sound |
 | `--log-keys` | Print each host key event and the C64 key it maps to |
 
@@ -81,8 +81,8 @@ Paste as Typing types letters in either case as capitals, so listings paste
 whatever their case, and skips characters the C64 can't type, such as `{`.
 
 No joystick is needed: the arrow keys act as one in port 2, where most games
-read it, and Space is its fire button as well as the C64's own Space, so screens
-that say "press SPACE" work too. The title bar shows `[JOYSTICK 2]`. To use the
+read it. Space and Enter are its fire button as well as the C64's own Space and
+RETURN, so screens that say "press SPACE" work too, and so does typing. The title bar shows `[JOYSTICK 2]`. To use the
 arrows as the C64's cursor keys, for editing BASIC, choose **Joystick > None**
 (or pass `--joystick 0`); **Port 1** is for the few games that read that port.
 

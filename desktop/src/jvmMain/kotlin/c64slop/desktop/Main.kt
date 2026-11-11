@@ -34,7 +34,7 @@ const val USAGE = """Usage: c64slop [options]
   --no-drive          Leave out the 1541, even if dos1541.rom is there
   --prg FILE          Load a PRG program after boot, and RUN it if it is BASIC
   --type TEXT         Type TEXT after boot; \n starts a new line
-  --joystick 0|1|2    The port the arrow keys and Space work as a joystick; 0 for none,
+  --joystick 0|1|2    The port the arrow keys, Space and Enter work as a joystick; 0 for none,
                       so the arrows are the cursor keys (default: 2)
   --no-sound          Run without sound
   --log-keys          Print each host key event and the C64 key it maps to"""
@@ -58,7 +58,7 @@ data class Options(
     val program: File? = null,
     val typeText: String? = null,
     /**
-     * The port the arrow keys and Space work as a joystick, or 0 for none.
+     * The port the arrow keys, Space and Enter work as a joystick, or 0 for none.
      * Port 2 by default, where most games read it.
      */
     val joystickPort: Int = 2,
