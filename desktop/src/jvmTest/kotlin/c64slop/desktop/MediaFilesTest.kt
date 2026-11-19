@@ -10,6 +10,7 @@ import javax.imageio.ImageIO
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class MediaFilesTest {
@@ -89,8 +90,34 @@ class MediaFilesTest {
     @Test
     fun disassemblesTheKernal() {
         val roms = testRoms() ?: return
-        val machine = runHeadless(roms, Options(screenshotFrames = 1))
+        val machine = runHeadless(roms, Options(screenshotFrames = 1)).machine
         // CHROUT, in the KERNAL's jump table, goes through the vector at $0326.
         assertEquals("FFD2  6C 26 03  JMP (\$0326)", disassemble(machine, 0xFFD2..0xFFD2))
+    }
+
+    @Test
+    fun parsesBreakpoints() {
+        assertEquals(listOf(0xFFD2, 0xC000), Options.parse(arrayOf("--break", "FFD2", "--break", "\$C000")).breakpoints)
+        assertFailsWith<IllegalArgumentException> { Options.parse(arrayOf("--break", "CHROUT")) }
+        assertEquals(emptyList(), Options.parse(arrayOf()).breakpoints)
+    }
+
+    @Test
+    fun stopsAtABreakpoint() {
+        val roms = testRoms() ?: return
+        // The IRQ handler, from the KERNAL's vector at $FFFE. CIA 1's 60 Hz timer interrupts
+        // reach it once the KERNAL has tested RAM and enabled them, after about 2.5 s.
+        val handler = (roms.kernal[0x1FFE].toInt() and 0xFF) or ((roms.kernal[0x1FFF].toInt() and 0xFF) shl 8)
+        val run = runHeadless(roms, Options(screenshotFrames = BOOT_FRAMES + 100, breakpoints = listOf(handler)))
+        assertEquals(handler, run.breakpoint)
+        assertEquals(handler, run.machine.cpu.programCounter)
+        assertEquals(c64slop.cpu.StepKind.IRQ, run.machine.cpu.lastStep)
+    }
+
+    @Test
+    fun saysWhenNoBreakpointWasReached() {
+        val roms = testRoms() ?: return
+        val run = runHeadless(roms, Options(screenshotFrames = 2, breakpoints = listOf(0xC000)))
+        assertNull(run.breakpoint)
     }
 }

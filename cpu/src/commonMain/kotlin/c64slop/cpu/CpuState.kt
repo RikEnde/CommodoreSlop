@@ -22,4 +22,15 @@ data class CpuState(
         require(programCounter in 0..0xFFFF)
         require(status in 0..0xFF)
     }
+
+    /** The status flags NV-BDIZC, a capital letter for each one set: `nv-BdIzC`. */
+    val flags: String
+        get() = "NV-BDIZC".mapIndexed { i, c ->
+            if (c == '-' || status and (0x80 shr i) != 0) c else c.lowercaseChar()
+        }.joinToString("")
+
+    /** One line for a log or a debugger: `PC=3FB6 A=00 X=FF Y=00 SP=FF P=34 nv-BdIzc`. */
+    val summary: String
+        get() = "PC=${hex4(programCounter)} A=${hex2(accumulator)} X=${hex2(x)} Y=${hex2(y)} " +
+            "SP=${hex2(stackPointer)} P=${hex2(status)} $flags"
 }

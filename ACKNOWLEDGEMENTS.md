@@ -17,8 +17,12 @@ SID. Its BASIC V2 came from Microsoft's 6502 BASIC; the KERNAL is Commodore's.
   application in the Commodore 64* (1996), the basis of our VIC-II: bad lines,
   the sprite and border sequences, and the timing of every cycle of a line.
 - The *Commodore 64 Programmer's Reference Guide*: the memory map, the PLA's
-  banking (appendix L), the keyboard matrix (appendix C) and the serial bus.
-- The MOS 6526 CIA and 6581 SID datasheets.
+  banking (appendix L), the keyboard matrix (appendix C) and the serial bus,
+  and the names the debugger shows for the KERNAL routines (`CHROUT`, `GETIN`
+  and so on), the 6510's port (`D6510`, `R6510`) and the KERNAL's RAM vectors
+  (`CINV`, `IBSOUT` and so on). Commodore gave them those names.
+- The MOS 6526 CIA and 6581 SID datasheets; the debugger's names for the CIA
+  registers (`PRA`, `TA_LO`, `ICR` and so on) are the 6526 datasheet's.
 - **Philip "Pepto" Timmermann**: the Colodore palette, measured from a PAL C64.
 
 ## Emulators

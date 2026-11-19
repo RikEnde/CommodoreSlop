@@ -120,6 +120,27 @@ class Disassembler(
         return result
     }
 
+    /**
+     * Up to [count] instructions that run into [address], ending just before
+     * it, for showing the code above the PC. Instructions can't be read
+     * backwards for certain, as any byte might be an operand. This decodes
+     * forwards from three bytes per instruction back, then from one byte
+     * nearer each time, and keeps the first run that lands exactly on
+     * [address]; 6502 code falls into step within a few instructions, so the
+     * ones nearest [address] are very likely right. Empty if no run lands on it.
+     */
+    fun before(address: Int, count: Int): List<DisassembledInstruction> {
+        for (back in 3 * count downTo 1) {
+            val run = mutableListOf<DisassembledInstruction>()
+            var offset = 0
+            while (offset < back) {
+                run += instruction(address - back + offset).also { offset += it.length }
+            }
+            if (offset == back) return run.takeLast(count)
+        }
+        return emptyList()
+    }
+
     /** A listing of [range], one [DisassembledInstruction.toString] per line. */
     fun listing(start: Int, end: Int, origin: Int = start): String = range(start, end, origin).joinToString("\n")
 

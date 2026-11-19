@@ -4,10 +4,13 @@ Copyright 2026 The C64slop contributors
 Licensed under the BSD 3-Clause License (see LICENSE). Files listed in
 REUSE.toml as third-party keep their own licenses; see LICENSES/.
 
-The cpu module is copied from Beebslop (https://github.com/RikEnde/Beebslop),
-which took it from Elkslop (https://github.com/RikEnde/elkslop), Copyright 2026
-The Elkslop contributors and The Beebslop contributors, under the same BSD
-3-Clause License. These files are adapted from Beebslop, under the same
+The cpu and debugger modules are copied from Beebslop
+(https://github.com/RikEnde/Beebslop), which took them from Elkslop
+(https://github.com/RikEnde/elkslop), Copyright 2026 The Elkslop contributors
+and The Beebslop contributors, under the same BSD 3-Clause License.
+c64/.../C64Labels.kt is adapted from Beebslop's BbcLabels.kt, and the --break
+option and the debugger hooks in desktop/.../Main.kt, Emulator.kt and
+EmulatorWindow.kt from Beebslop's, all under the same license. These files are adapted from Beebslop, under the same
 license: c64/.../Typist.kt, c64/.../KeyboardText.kt, the whole desktop front
 end (desktop/.../Main.kt, Emulator.kt, EmulatorWindow.kt, ScreenPanel.kt,
 KeyMapping.kt, NaturalKeyboard.kt, AudioOutput.kt, MediaFiles.kt,

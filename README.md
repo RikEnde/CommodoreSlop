@@ -32,6 +32,7 @@ To run without Gradle or Java installed, see [Standalone app](#standalone-app).
 | `--disassemble A-B` | Run without a window, then print the machine code from hex address A to B, as in `--disassemble E5CD-E5FF` |
 | `--origin ADDR` | With `--disassemble`: number the listing from hex ADDR, for code that is copied there before it runs |
 | `--frames N` | 50ths of a second to run before the screenshot or listing (default: 200); a load from disk needs about 4000 |
+| `--break ADDR` | Stop at hex ADDR and open the debugger; repeat for more. Without a window (with `--disassemble`), the run ends there instead and the registers are printed before the listing |
 | `--tape FILE` | Put a TAP cassette image in the datasette |
 | `--disk FILE` | Put a D64 disk image in the 1541, drive 8 |
 | `--no-drive` | Leave out the 1541, even if `dos1541.rom` is there |
@@ -46,8 +47,68 @@ The window shows the picture and runs in real time. **Machine** has Pause
 switch; **Edit** has Paste as Typing; **Keys** has RUN/STOP + RESTORE, keys a
 host keyboard lacks, f1-f8 and the keyboard layout; **Tape** inserts, plays,
 records, rewinds, ejects and saves cassettes, and turns on Fast Loading;
-**Disk** inserts, ejects, write-protects and saves the 1541's disk; **Joystick** chooses the port the arrow keys work; **View** sets the size;
+**Disk** inserts, ejects, write-protects and saves the 1541's disk; **Joystick** chooses the port the arrow keys work; **Debug** opens the debugger; **View** sets the size;
 **Help > Keyboard** lists the keys.
+
+### Debugger
+
+**Debug > Debugger...** (Cmd+B on macOS, Ctrl+Shift+B elsewhere; Cmd+D is
+Insert Disk) opens a window on the running machine. It shows the code around
+the PC, the registers and flags, the stack, the breakpoints and a memory dump.
+While the machine runs they update ten times a second. When it stops, the code
+view jumps to the next instruction to run, marked `▶`. The window is Elkslop's
+and Beebslop's, and works the same way.
+
+| Key | Button | |
+|---|---|---|
+| F5 | Continue | Run until a breakpoint |
+| F6 | Pause | Stop at the end of the frame (also Machine > Pause, Cmd+P) |
+| F7 | Step Into | Run one instruction, or take one interrupt |
+| F8 | Step Over | Run one instruction; a JSR runs until it returns, and interrupts run to their RTI |
+| Shift+F8 | Step Out | Run until the current subroutine or interrupt handler returns |
+| F9 | | Toggle the breakpoint on the selected line |
+
+These keys work in the debugger window; in the main window F1-F8 are still the
+C64's function keys. On macOS, hold Fn for them if they control the Mac.
+
+Click a line's left edge, or double-click it, to toggle its breakpoint
+(shown `●`). Right-click a line to run to it, or to show the code or memory its
+operand names. **Go to** takes a hex address (`$`, `&` and `0x` are all fine) or
+a name such as `CHROUT` or `CIA1_ICR`, and stops the view following the PC until
+you click **Follow PC** again or the machine stops. Scroll the memory dump with
+the mouse wheel. Breakpoints stop the machine before their instruction runs, and
+stay set when the window closes. **Debug > Break into Debugger** pauses the
+machine and opens the window.
+
+The listing names the KERNAL's jump table, the 6510's port, the KERNAL's RAM
+vectors and the CIA registers, and the base of the VIC-II, SID and colour RAM
+(`C64Labels.kt`), so `JSR $FFD2` shows as `JSR CHROUT`. The memory view reads
+I/O without side effects, so looking at a CIA doesn't clear its interrupt flags.
+
+The code and memory views show memory as the CPU sees it now, through the
+banking set by the 6510's port at `$01`: BASIC, the KERNAL, I/O or the character
+ROM where they are switched in, and RAM where they are not. That is what the
+next instruction will read; RAM under a ROM shows only when the program has
+switched the ROM out.
+
+Step Over waits for a JSR to return to the next instruction. A routine that
+reads data placed after its JSR returns past that data instead, so Step Over
+runs on to the next breakpoint; use Step Into, then Step Out, for those.
+
+Stepping can stop in the middle of a frame; the screen shows the last whole
+frame until the machine finishes the next one. Lines above the PC are found by
+decoding forwards from a little way back, so after data they may be wrong; the
+lines from the PC on are always right.
+
+With `--break`, a headless run stops as soon as the CPU is about to execute
+that address; `--frames` is then the most it runs. For example, to stop at the
+first character the KERNAL prints, `$93` to clear the screen:
+
+```sh
+./run.sh --break FFD2 --disassemble FFD2-FFD4
+Breakpoint at FFD2: PC=FFD2 A=93 X=38 Y=00 SP=F5 P=A1 Nv-bdizC
+FFD2  6C 26 03  JMP ($0326)
+```
 
 ### Keyboard
 
@@ -170,7 +231,8 @@ on first launch macOS refuses to open it by double-click: right-click it, choose
 The emulation core lives in `commonMain` source sets and depends only on the
 common Kotlin standard library. It declares JVM and Kotlin/Native macOS, Linux and
 Windows targets. Loading ROM files lives in `jvmTest`. Only the JVM tests have
-been run so far. The `desktop` front end is JVM-only, because it uses Swing.
+been run so far. The `desktop` front end and the `debugger` window are JVM-only,
+because they use Swing.
 
 ## Build and test
 
@@ -178,7 +240,7 @@ Use a JDK 17 or newer. The Gradle wrapper pins Gradle 9.7.0 and verifies its
 archive checksum; Kotlin is pinned to 2.4.21.
 
 ```sh
-./gradlew :cpu:jvmTest :c64:jvmTest :desktop:jvmTest
+./gradlew :cpu:jvmTest :c64:jvmTest :debugger:jvmTest :desktop:jvmTest
 ```
 
 Tests use checked-in fixtures and ROMs; they download nothing.
@@ -193,6 +255,21 @@ See Beebslop's README for the details. The 6510's I/O port and its RDY line are
 not in the CPU: they live on the C64's bus ([`ProcessorPort.kt`],
 [`C64MemoryBus.kt`]). C64slop adds the SO input (`setOverflow()`), which sets
 the V flag: the 1541 wires its byte-ready signal there.
+
+Besides the CPU itself (`Cpu6502.kt`), the module has:
+
+- `StepKind.kt`: what `Cpu6502.lastStep` says the last step did: ran an
+  instruction, took an IRQ or NMI, or idled halted.
+- `Disassembler.kt`: a listing of any range of memory, read through a
+  side-effect-free `peek`, with undocumented opcodes marked and optional names
+  for addresses; `before` finds the instructions that lead up to an address.
+- `Debugger.kt`: breakpoints, step into, over and out, and run to an address.
+  It never runs the CPU: the machine's loop asks `shouldStop(cpu)` before each
+  step and calls `stepped(cpu)` after, so timing and interrupt lines stay the
+  machine's business, and any 6502 machine can use it. `active` is false with no
+  breakpoints and no step under way, so the loop can skip both calls.
+- `CpuState.kt`: the registers, with `flags` (`nv-BdIzC`) and a one-line
+  `summary` for logs and the debugger.
 
 ## C64 machine module
 
@@ -217,6 +294,7 @@ The production code is in `c64/src/commonMain/kotlin/c64slop/c64`.
 | `Drive1541.kt` | The 1541 disk drive: its 6502, RAM, DOS ROM, two VIAs, head and serial port |
 | `Via6522.kt` | The 6522 VIA, copied from Beebslop, used twice in the 1541 |
 | `Disk.kt` | A disk as rings of GCR bytes, made from and saved to D64 images |
+| `C64Labels.kt` | Names for the KERNAL's jump table and RAM vectors, the 6510's port and the I/O chips, for the debugger |
 
 ### Memory map
 
@@ -263,7 +341,35 @@ the real ROMs, a program loaded and run on the real-time emulator thread and
 stopped with RUN/STOP + RESTORE, TAP and PRG files, screenshots and options. It
 loads T-Rex 64 from its D64 with `LOAD "*",8`, comparing every byte with the
 file on the disk, and runs it; and a `SAVE` reaches the D64 file once the
-drive's motor stops.
+drive's motor stops. A headless run with `--break` stops in the KERNAL's IRQ
+handler, with `lastStep` saying an IRQ took it there. `C64LabelsTest` checks
+every name in the jump table against the KERNAL ROM.
+
+## Debugger module
+
+`debugger/src/jvmMain/kotlin/c64slop/debugger` is Elkslop's Swing debugger for
+any 6502 machine, as Beebslop has it, unchanged apart from its package. It
+depends on `cpu` and nothing else.
+
+- `DebugSession.kt`: the machine's half, used only on the emulation thread. It
+  owns the `cpu` module's `Debugger`, says in words why the machine stopped, and
+  copies the registers and all 64 KiB into a `DebugSnapshot` whenever the machine
+  stops or a breakpoint changes, and ten times a second while it runs with a
+  window watching. The machine loop calls `shouldStop`/`stepped` around each
+  step, and `pausedChanged`/`tick` once per frame.
+- `DebugTarget.kt`: what the window asks of the machine. `DebugSession.target`
+  makes one from the machine's command queue, so requests from the window's
+  thread run on the machine's thread.
+- `DebugSnapshot.kt`: the machine as the window shows it.
+- `DebuggerWindow.kt`: the window. It draws only from snapshots and sends
+  requests through its `DebugTarget`. The machine passes in a title, names for
+  addresses (`C64Labels`), and a hook for the frame (C64slop sets its icon there).
+
+The desktop `Emulator` runs frames through `Emulator.runFrame`, which asks the
+session before each step. When it stops partway through a frame, the next run
+finishes that frame instead of starting a new one, so held keys, typing and
+RESTORE aren't repeated. The module's tests drive a session with a bare
+`Cpu6502` on RAM and a fake command queue.
 
 ## License
 
