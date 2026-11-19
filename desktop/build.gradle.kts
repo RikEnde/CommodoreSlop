@@ -12,7 +12,10 @@ kotlin {
     jvm()
 
     sourceSets {
-        jvmMain.dependencies { implementation(project(":c64")) }
+        jvmMain.dependencies {
+            implementation(project(":c64"))
+            implementation(project(":debugger"))
+        }
         jvmTest.dependencies { implementation(kotlin("test")) }
     }
 }

@@ -51,6 +51,10 @@ class Cpu6502(private val bus: MemoryBus) {
     var halted: Boolean = false
         private set
 
+    /** What the last [step] did: ran an instruction, took an interrupt, or idled halted. */
+    var lastStep: StepKind = StepKind.INSTRUCTION
+        private set
+
     /** Level-sensitive input. The machine must release it when the source clears. */
     var irqAsserted: Boolean = false
 
@@ -114,13 +118,17 @@ class Cpu6502(private val bus: MemoryBus) {
     fun step(): Int {
         val startCycles = totalCycles
         if (halted) {
+            lastStep = StepKind.HALTED
             read(0xFFFF)
         } else if (nmiPending) {
+            lastStep = StepKind.NMI
             nmiPending = false
             interrupt(0xFFFA)
         } else if (irqAsserted && !irqMasked) {
+            lastStep = StepKind.IRQ
             interrupt(0xFFFE)
         } else {
+            lastStep = StepKind.INSTRUCTION
             val instructionAddress = programCounter
             val opcode = fetchByte()
             val instruction = InstructionSet.instructions[opcode]!!

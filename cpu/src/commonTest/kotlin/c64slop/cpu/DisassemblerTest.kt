@@ -128,6 +128,24 @@ class DisassemblerTest {
     }
 
     @Test
+    fun findsTheInstructionsBeforeAnAddress() {
+        // LDA #$A9 / STA $1234 / LDX $20 / INX: the operand $A9 looks like LDA #.
+        at(0xC000, 0xA9, 0xA9, 0x8D, 0x34, 0x12, 0xA6, 0x20, 0xE8)
+        val disassembler = Disassembler({ memory[it] })
+        val before = disassembler.before(0xC007, 3)
+        assertEquals(listOf("STA \$1234", "LDX \$20"), before.takeLast(2).map { it.text })
+        assertEquals(0xC007, before.last().next)
+        assertEquals(3, before.size)
+    }
+
+    @Test
+    fun nothingBeforeWhenNoRunLandsThere() {
+        // LDA # at $BFFD runs to $BFFF, and JSR from $BFFE or $BFFF runs past $C000.
+        val disassembler = at(0xBFFD, 0xA9, 0x20, 0x20)
+        assertTrue(disassembler.before(0xC000, 1).isEmpty())
+    }
+
+    @Test
     fun readsOnlyWhatItNeeds() {
         val reads = mutableListOf<Int>()
         memory[0x2000] = 0xEA

@@ -13,4 +13,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "c64slop"
-include(":cpu", ":c64", ":desktop")
+include(":cpu", ":c64", ":debugger", ":desktop")

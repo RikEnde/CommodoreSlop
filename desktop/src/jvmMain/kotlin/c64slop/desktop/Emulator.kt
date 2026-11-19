@@ -15,6 +15,8 @@ import c64slop.c64.Tape
 import c64slop.c64.Typist
 import c64slop.c64.Vic6569
 import c64slop.c64.load
+import c64slop.debugger.DebugSession
+import c64slop.debugger.DebugTarget
 import java.io.File
 import java.io.IOException
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -53,6 +55,12 @@ class Emulator(
 
         /** Called when a changed disk couldn't be written back to [file]; it stays in, unsaved. */
         fun diskSaveFailed(file: File, error: IOException) {}
+
+        /** Called on the emulation thread when the machine pauses or runs again, for any reason. */
+        fun pausedChanged(paused: Boolean) {}
+
+        /** Called on the emulation thread when the debugger stops the machine. */
+        fun debuggerStopped() {}
     }
 
     /** The disk in the drive, and the file it is saved to, if any. */
@@ -84,6 +92,20 @@ class Emulator(
 
     /** Frames left until RESTORE is let go, after a RUN/STOP + RESTORE from the menu. */
     private var restoreFrames = 0
+
+    /** Breakpoints, stepping and snapshots; only the emulation thread touches it. */
+    private val debug = DebugSession({ machine.bus.peek(it) })
+
+    /** The frame under way, if the debugger stopped the machine partway through it. */
+    private var unfinished: Frame? = null
+    private var reportedPaused = false
+
+    /** For the debugger window: its requests reach [debug] through the command queue. */
+    val debugTarget: DebugTarget = debug.target(
+        post = { block -> post { block() } },
+        cpu = { machine.cpu },
+        setPaused = { paused = it },
+    )
 
     @Volatile private var running = false
     @Volatile var paused = false
@@ -204,6 +226,9 @@ class Emulator(
     /** Press keys together briefly, for keys a menu click can't hold down. */
     fun tap(vararg keys: Key) = post { typist.enqueueChord(keys.toList()) }
 
+    /** Set or clear a breakpoint, as for --break; the debugger window has [debugTarget]. */
+    fun setBreakpoint(address: Int, on: Boolean) = debugTarget.setBreakpoint(address, on)
+
     /** Type [text]; characters the C64 cannot type are skipped and returned. */
     fun type(text: String, delayFrames: Int = 0): Set<Char> {
         val skipped = text.filter { it != '\t' && it != '\r' && !KeyboardText.canType(it) }.toSet()
@@ -308,6 +333,7 @@ class Emulator(
         holds.clear()
         pendingReleases.clear()
         restoreFrames = 0
+        unfinished = null
         machine = createMachine().also { fresh ->
             fresh.datasette.tape = old.datasette.tape
             fresh.datasette.playDown = old.datasette.playDown
@@ -342,7 +368,14 @@ class Emulator(
                 machine.sid.startSampling(SAMPLE_RATE, samples.size)
                 soundMachine = machine
             }
-            if (paused) {
+            val isPaused = paused
+            if (isPaused != reportedPaused) {
+                reportedPaused = isPaused
+                debug.pausedChanged(isPaused)
+                listener.pausedChanged(isPaused)
+            }
+            debug.tick(machine.cpu, isPaused, frameCount)
+            if (isPaused) {
                 Thread.sleep(10)
                 paceStart = System.nanoTime()
                 paceCycles = 0
@@ -384,14 +417,32 @@ class Emulator(
         return datasette.motorRunning && (datasette.recording || !cassette.atEnd)
     }
 
-    /** Runs one frame and publishes the picture; returns the elapsed cycles. */
+    /**
+     * Runs one frame and publishes the picture, or runs until the debugger stops
+     * the machine partway through one; returns the elapsed cycles. A frame the
+     * debugger stopped is finished on the next call, and its once-a-frame work
+     * (held inputs, typing, keys, RESTORE) isn't repeated.
+     */
     private fun runField(): Long {
         val machine = machine
-        releaseDue(machine)
-        typist.onFrame(machine)
-        natural.onFrame(machine.keyboard)
-        if (restoreFrames > 0 && --restoreFrames == 0) machine.keyboard.restore = false
-        val elapsed = runFrame(machine)
+        val start = machine.clock.cycles
+        val frame = unfinished ?: Frame(start, machine.vic.frames).also {
+            releaseDue(machine)
+            typist.onFrame(machine)
+            natural.onFrame(machine.keyboard)
+            if (restoreFrames > 0 && --restoreFrames == 0) machine.keyboard.restore = false
+        }
+        val cpu = machine.cpu
+        val debug = debug
+        val finished = runFrame(machine, frame, { debug.shouldStop(cpu) }, { debug.stepped(cpu) })
+        val elapsed = machine.clock.cycles - start
+        if (!finished) {
+            unfinished = frame
+            paused = true
+            listener.debuggerStopped()
+            return elapsed
+        }
+        unfinished = null
         synchronized(frameLock) { machine.vic.pixels.copyInto(published) }
         listener.frameReady(++frameCount)
         val motor = machine.datasette.motorRunning
@@ -410,7 +461,9 @@ class Emulator(
             // Like the real machine, a jammed CPU leaves the display running and
             // only a reset recovers it. Pause so the user knows why it froze.
             paused = true
-            listener.stopped(IllegalStateException("The 6510 executed a JAM opcode and halted."))
+            val address = (machine.cpu.programCounter - 1) and 0xFFFF
+            debug.stopped("Halted by JAM at $%04X".format(address))
+            listener.stopped(IllegalStateException("The 6510 executed a JAM opcode at $%04X and halted.".format(address)))
         }
         return elapsed
     }
@@ -425,16 +478,37 @@ class Emulator(
         /** RESTORE's place in the held inputs. */
         private const val RESTORE = "RESTORE"
 
-        /**
-         * Runs one frame: on to the VIC-II's next wrap to raster line 0, which is
-         * always [C64Clock.CYCLES_PER_FRAME] cycles on the PAL chip. Returns the
-         * elapsed cycles.
-         */
+        /** Runs one frame; returns the elapsed cycles. */
         fun runFrame(machine: C64Machine): Long {
             val start = machine.clock.cycles
-            val frame = machine.vic.frames
-            while (machine.vic.frames == frame) machine.step()
+            runFrame(machine, Frame(start, machine.vic.frames))
             return machine.clock.cycles - start
+        }
+
+        /**
+         * Runs [frame]: on to the VIC-II's next wrap to raster line 0, which is
+         * always [C64Clock.CYCLES_PER_FRAME] cycles on the PAL chip.
+         *
+         * [shouldStop] is asked before each step and [stepped] told after it,
+         * for a debugger. True means the frame is done; false means
+         * [shouldStop] stopped it, and calling again with the same [frame]
+         * carries on where it left off.
+         */
+        inline fun runFrame(
+            machine: C64Machine,
+            frame: Frame,
+            shouldStop: () -> Boolean = { false },
+            stepped: () -> Unit = {},
+        ): Boolean {
+            while (machine.vic.frames == frame.field) {
+                if (shouldStop()) return false
+                machine.step()
+                stepped()
+            }
+            return true
         }
     }
 }
+
+/** A frame under way: the cycle it started at, and the VIC-II's frame count then; it ends when that changes. */
+class Frame(val start: Long, val field: Long)

@@ -8,6 +8,7 @@ import c64slop.c64.C64Machine
 import c64slop.c64.Typist
 import c64slop.c64.Vic6569
 import c64slop.c64.load
+import c64slop.cpu.Debugger
 import c64slop.cpu.Disassembler
 import java.awt.GraphicsEnvironment
 import java.awt.image.BufferedImage
@@ -16,6 +17,7 @@ import java.io.IOException
 import javax.imageio.ImageIO
 import javax.swing.JOptionPane
 import javax.swing.SwingUtilities
+import javax.swing.UIManager
 import kotlin.system.exitProcess
 
 /** Frames to wait after power-on before typing: the KERNAL needs about 2.5 s to test RAM and show READY. */
@@ -29,6 +31,9 @@ const val USAGE = """Usage: c64slop [options]
                       A to B, as in --disassemble E5CD-E5FF
   --origin ADDR       Number the listing from hex ADDR, for code that is copied there to run
   --frames N          50ths of a second to run before the screenshot or listing (default: 200)
+  --break ADDR        Stop at hex ADDR and open the debugger; repeat for more. Without
+                      a window (with --disassemble), the run ends there instead and
+                      the registers are printed before the listing
   --tape FILE         Put a TAP cassette image in the datasette
   --disk FILE         Put a D64 disk image in the 1541, drive 8
   --no-drive          Leave out the 1541, even if dos1541.rom is there
@@ -50,6 +55,8 @@ data class Options(
     val disassemble: IntRange? = null,
     /** Where the code in [disassemble] runs from, if it is copied there first; null for where it is. */
     val origin: Int? = null,
+    /** Breakpoints to set before the machine starts. */
+    val breakpoints: List<Int> = emptyList(),
     val logKeys: Boolean = false,
     val sound: Boolean = true,
     val tape: File? = null,
@@ -79,6 +86,8 @@ data class Options(
                     "--disassemble" -> options.copy(disassemble = parseRange(value()))
                     "--origin" -> options.copy(origin = address(value())
                         ?: throw IllegalArgumentException("--origin needs a hex address, as in 014E"))
+                    "--break" -> options.copy(breakpoints = options.breakpoints + (address(value())
+                        ?: throw IllegalArgumentException("--break needs a hex address, as in FFD2")))
                     "--log-keys" ->options.copy(logKeys = true)
                     "--no-sound" -> options.copy(sound = false)
                     "--tape" -> options.copy(tape = File(value()))
@@ -201,7 +210,7 @@ fun isBundled(file: File): Boolean {
 }
 
 /** Writes the picture after [runHeadless] to [file] as a PNG. */
-fun saveScreenshot(roms: Roms, options: Options, file: File) = saveScreenshot(runHeadless(roms, options), file)
+fun saveScreenshot(roms: Roms, options: Options, file: File) = saveScreenshot(runHeadless(roms, options).machine, file)
 
 /** Writes [machine]'s last frame to [file] as a PNG. */
 fun saveScreenshot(machine: C64Machine, file: File) {
@@ -220,13 +229,19 @@ fun saveScreenshot(machine: C64Machine, file: File) {
 fun disassemble(machine: C64Machine, range: IntRange, origin: Int = range.first): String =
     Disassembler(machine.bus::peek).listing(range.first, range.last, origin)
 
+/** The machine after [runHeadless], and the breakpoint it stopped at, if it did. */
+class HeadlessRun(val machine: C64Machine, val breakpoint: Int?)
+
 /**
  * Builds a machine and runs [Options.screenshotFrames] frames (50ths of a
  * second) as fast as possible, with the tape, disk, program and text from
  * [options]. A tape plays only if the text starts it, with PLAY down. Disk
  * changes are not saved.
+ *
+ * With [Options.breakpoints], the run ends as soon as the CPU is about to
+ * execute one of them; the frame count is then the most it runs.
  */
-fun runHeadless(roms: Roms, options: Options): C64Machine {
+fun runHeadless(roms: Roms, options: Options): HeadlessRun {
     val machine = roms.newMachine()
     options.tape?.let {
         machine.datasette.tape = TapeFile.load(it)
@@ -240,16 +255,36 @@ fun runHeadless(roms: Roms, options: Options): C64Machine {
         if (program.isBasic) typist.enqueue("RUN\n")
     }
     options.typeText?.let { typist.enqueue(it, delayFrames = BOOT_FRAMES) }
+    val debugger = Debugger(machine.bus::peek)
+    for (address in options.breakpoints) debugger.setBreakpoint(address)
+    val cpu = machine.cpu
     repeat(options.screenshotFrames) {
         typist.onFrame(machine)
-        Emulator.runFrame(machine)
+        val frame = Frame(machine.clock.cycles, machine.vic.frames)
+        val finished = Emulator.runFrame(machine, frame, { debugger.active && debugger.shouldStop(cpu) })
+        if (!finished) return HeadlessRun(machine, cpu.programCounter)
     }
-    return machine
+    return HeadlessRun(machine, null)
+}
+
+/**
+ * Swing draws its own cross-platform look (Metal) unless told otherwise. Use the
+ * host's instead: Aqua on macOS, Windows on Windows, GTK where available. Must run
+ * before any component is made; if the host's look fails to load, Metal stays.
+ */
+fun useSystemLookAndFeel() {
+    if (GraphicsEnvironment.isHeadless()) return
+    try {
+        UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName())
+    } catch (e: Exception) {
+        System.err.println("Keeping Swing's own look: ${e.message}")
+    }
 }
 
 fun main(args: Array<String>) {
     System.setProperty("apple.awt.application.name", "C64slop")
     System.setProperty("apple.laf.useScreenMenuBar", "true")
+    useSystemLookAndFeel()
 
     val options = try {
         Options.parse(args)
@@ -281,11 +316,18 @@ fun main(args: Array<String>) {
         exitProcess(2)
     }
     if (options.screenshot != null || options.disassemble != null) {
-        val machine = try {
+        val run = try {
             runHeadless(roms, options)
         } catch (e: IOException) {
             System.err.println("Couldn't load a tape, disk or program: ${e.message}")
             exitProcess(1)
+        }
+        val machine = run.machine
+        if (options.breakpoints.isNotEmpty()) {
+            println(
+                if (run.breakpoint != null) "Breakpoint at %04X: %s".format(run.breakpoint, machine.cpu.state().summary)
+                else "No breakpoint reached in ${options.screenshotFrames} frames: ${machine.cpu.state().summary}",
+            )
         }
         options.disassemble?.let { println(disassemble(machine, it, options.origin ?: it.first)) }
         options.screenshot?.let {

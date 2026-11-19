@@ -8,6 +8,8 @@ import c64slop.c64.Disk
 import c64slop.c64.Joystick
 import c64slop.c64.KeyboardMatrix.Key
 import c64slop.c64.Tape
+import c64slop.c64.C64Labels
+import c64slop.debugger.DebuggerWindow
 import java.awt.BorderLayout
 import java.awt.FileDialog
 import java.awt.Toolkit
@@ -61,6 +63,9 @@ class EmulatorWindow(roms: Roms, private val options: Options) : Emulator.Listen
     private var diskName: String? = null
     private val writeProtectItem = JCheckBoxMenuItem("Write Protect")
     @Volatile private var diskMotor = false
+    private val debuggerWindow by lazy {
+        DebuggerWindow(emulator.debugTarget, "C64slop Debugger", C64Labels::forAddress, AppIcon::install)
+    }
 
     fun show() {
         frame.defaultCloseOperation = WindowConstants.DISPOSE_ON_CLOSE
@@ -84,6 +89,7 @@ class EmulatorWindow(roms: Roms, private val options: Options) : Emulator.Listen
         frame.setLocationRelativeTo(null)
         frame.isVisible = true
         screen.requestFocusInWindow()
+        for (address in options.breakpoints) emulator.setBreakpoint(address, true)
         options.tape?.let { insertTape(it) }
         options.disk?.let { insertDisk(it) }
         options.program?.let { loadProgram(it, delayFrames = BOOT_FRAMES) }
@@ -105,6 +111,17 @@ class EmulatorWindow(roms: Roms, private val options: Options) : Emulator.Listen
                 JOptionPane.ERROR_MESSAGE,
             )
         }
+    }
+
+    override fun pausedChanged(paused: Boolean) {
+        SwingUtilities.invokeLater {
+            pauseItem.isSelected = paused
+            updateTitle()
+        }
+    }
+
+    override fun debuggerStopped() {
+        SwingUtilities.invokeLater { debuggerWindow.show() }
     }
 
     override fun motorChanged(on: Boolean) {
@@ -310,6 +327,16 @@ class EmulatorWindow(roms: Roms, private val options: Options) : Emulator.Listen
                 group.add(choice)
                 add(choice)
             }
+        })
+        add(JMenu("Debug").apply {
+            // Cmd+D (Ctrl+Shift+D) is Insert Disk here, so the debugger has B.
+            add(item("Debugger...", shortcut(KeyEvent.VK_B)) { debuggerWindow.show() })
+            add(item("Break into Debugger", null) {
+                emulator.paused = true
+                pauseItem.isSelected = true
+                updateTitle()
+                debuggerWindow.show()
+            })
         })
         add(JMenu("View").apply {
             val group = ButtonGroup()
